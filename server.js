@@ -30,11 +30,12 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')
       return json(res, 200, viewers.map((viewer,id) => ({id,...viewer.status()})));
-    const match = url.pathname.match(/^\/(stream|snapshot|api\/cameras)\/(\d+)(?:\/(reconnect))?$/);
+    const match = url.pathname.match(/^\/(stream|audio|snapshot|api\/cameras)\/(\d+)(?:\/(reconnect))?$/);
     if (match) {
       const id = Number(match[2]), viewer = viewers[id];
       if (!viewer) return json(res,404,{error:'Kamera tidak ditemukan.'});
       if (match[1] === 'stream' && req.method === 'GET') return viewer.subscribe(res);
+      if (match[1] === 'audio' && req.method === 'GET') return viewer.subscribeAudio(res);
       if (match[1] === 'snapshot' && req.method === 'GET') {
         if (!viewer.lastJpeg || viewer.state !== 'live') return json(res,503,{error:'Gambar kamera belum tersedia.'});
         res.writeHead(200, {'Content-Type':'image/jpeg','Cache-Control':'no-store',

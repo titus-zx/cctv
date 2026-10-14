@@ -27,10 +27,49 @@ async function reconnect(id) {
   try { await api(`/api/cameras/${id}/reconnect`,{}); await refresh(); }
   catch(error) {toast(error.message);}
 }
+// G.711 A-law → float samples (ITU-T G.711 reference decoding).
+const alawTable = Float32Array.from({length:256}, (_, i) => {
+  const a = i ^ 0x55, seg = (a & 0x70) >> 4; let t = (a & 0x0f) << 4;
+  t = seg === 0 ? t + 8 : (t + 0x108) << Math.max(0, seg - 1);
+  return ((a & 0x80) ? t : -t) / 32768;
+});
+const sound = {context:null, id:null, abort:null, next:0};
+function stopSound() {
+  sound.abort?.abort(); sound.abort = null; sound.id = null;
+  for (const button of document.querySelectorAll('.sound')) {
+    button.textContent = '🔇'; button.setAttribute('aria-pressed','false'); button.title = 'Aktifkan suara';
+  }
+}
+async function playSound(id, button) {
+  sound.context ||= new AudioContext({sampleRate:8000});
+  await sound.context.resume();
+  const abort = sound.abort = new AbortController(); sound.id = id; sound.next = 0;
+  button.textContent = '🔊'; button.setAttribute('aria-pressed','true'); button.title = 'Matikan suara';
+  try {
+    const response = await fetch(`/audio/${id}`, {signal:abort.signal});
+    const reader = response.body.getReader();
+    while (true) {
+      const {value, done} = await reader.read(); if (done) break;
+      const samples = Float32Array.from(value, byte => alawTable[byte]);
+      const buffer = sound.context.createBuffer(1, samples.length, 8000); buffer.copyToChannel(samples, 0);
+      const source = sound.context.createBufferSource(); source.buffer = buffer; source.connect(sound.context.destination);
+      const now = sound.context.currentTime;
+      // Keep ~150 ms of buffer; drop audio when latency grows beyond 1 s so sound stays in sync with video.
+      if (sound.next < now + 0.02) sound.next = now + 0.15;
+      if (sound.next > now + 1) continue;
+      source.start(sound.next); sound.next += buffer.duration;
+    }
+  } catch (error) { if (error.name !== 'AbortError') toast('Audio terputus.'); }
+  if (sound.abort === abort) stopSound();
+}
 function createCard(camera) {
   const card = document.querySelector('#camera-template').content.firstElementChild.cloneNode(true);
   card.querySelector('.settings').onclick = () => openSettings(cameras.find(c=>c.id===camera.id));
   card.querySelector('.retry').onclick = () => reconnect(camera.id);
+  card.querySelector('.sound').onclick = event => {
+    const wasPlaying = sound.id === camera.id; stopSound();
+    if (!wasPlaying) playSound(camera.id, event.currentTarget).catch(error => toast(error.message));
+  };
   const img = card.querySelector('.video');
   img.onerror = () => img.removeAttribute('src');
   card.querySelector('.fullscreen').onclick = async () => {
@@ -71,6 +110,7 @@ function render(camera) {
   card.querySelector('.live-badge').hidden = !live;
   card.querySelector('.video-quality').hidden = !live;
   card.querySelector('.video-quality').textContent = camera.quality.toUpperCase();
+  card.querySelector('.sound').hidden = !(live && camera.audio);
   card.querySelector('.fullscreen').disabled = !live;
   card.querySelector('.snapshot').setAttribute('aria-disabled',String(!live));
 }
