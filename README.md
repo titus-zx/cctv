@@ -1,240 +1,116 @@
-# V380 Local Viewer
+# V380 CCTV — Rust
 
-Viewer CCTV V380 di browser. Server Node.js login ke kamera melalui TCP 8800 (LAN atau relay cloud V380), merakit fragment video, mendekode AES-128-ECB berdasarkan tiket sesi, dan mengubah H.264/H.265 serta frame JPEG menjadi MJPEG melalui FFmpeg. Mode LAN tidak membutuhkan aplikasi Apple, akun cloud, atau perubahan firmware.
+Server, protokol V380, recorder, storage, discovery, dan CLI ditulis dalam Rust. Frontend ditulis dalam Rust dan dikompilasi menjadi WebAssembly; `public/bootstrap.js` hanya memuat binding hasil `wasm-bindgen`. FFmpeg menangani video, rclone menangani penyimpanan cloud. Runtime Docker tidak membutuhkan Node.js atau Python.
 
-## Jalankan
+## Jalankan dengan Docker
 
-Butuh Node.js 18+ dan FFmpeg di PATH. Tidak ada dependency npm untuk dipasang.
+Dockerfile membangun binary Linux statis dan frontend WebAssembly dari Cargo.lock. Build pertama lebih lama pada CPU Celeron; build berikutnya memakai cache Cargo.
 
-```sh
-# Hanya bila config.json belum ada:
-cp config.example.json config.json
-# Isi password kamera di config.json, lalu:
-npm start
-```
-
-Buka **http://localhost:3380**. Untuk mode LAN, Mac dan kamera harus berada di jaringan yang saling terhubung. Server hanya mendengarkan di 127.0.0.1; alamat lokal ini juga digunakan saat kamera diakses melalui relay cloud. Gunakan `PORT=3381 npm start` jika port utama terpakai. Untuk lokasi FFmpeg lain, gunakan `FFMPEG_PATH=/path/to/ffmpeg npm start`.
-
-Fitur: preview video hingga 5 fps secara default, status koneksi, snapshot JPEG, layar penuh, pengaturan kamera, kualitas HD/SD, reconnect otomatis untuk gangguan jaringan, dan dukungan RTSP/bridge. Password didukung hingga 47 byte. Password yang kosong pada formulir mempertahankan nilai tersimpan; password tidak dikembalikan melalui API. Login yang ditolak menunggu pengaturan diperbaiki atau reconnect manual, agar tidak mencoba password berulang kali.
-
-Kamera tambahan dapat dimasukkan ke array `cameras` di `config.json`, lalu restart server. File ini berisi kredensial lokal dan diabaikan Git. Untuk mode RTSP, isi `mode: "rtsp"` serta `rtspUrl` yang lengkap. Encode karakter khusus dalam username/password URL, misalnya `#` menjadi `%23`.
-
-## Verifikasi
-
-```sh
-npm test
-curl http://localhost:3380/api/cameras
-curl http://localhost:3380/snapshot/0 -o /tmp/snapshot.jpg
-```
-
-Tests mencakup cuplikan terenkripsi dari kamera, fragmentasi TCP, respons kontrol panjang, password ditolak, penghentian koneksi, password yang melewati satu blok AES, dan frame JPEG. Tiga kamera telah diuji dengan device version 31, communication version 20, H.264 1280×720; kamera Kitchen memakai JPEG 640×480. Varian H.265 dan communication version 21 diimplementasikan tetapi belum diverifikasi pada hardware lain. PTZ dan playback SD card belum disediakan; audio hanya direkam (lihat bagian rekam), belum diputar di live view.
-
-Implementasi protokol menggunakan referensi [V380Decoder](https://github.com/PyanSofyan/V380Decoder), dengan implementasi Node.js di `lib/v380.js`. Kunci video memakai tiket login 32 bit dan konstanta media; video didekode 64 byte setiap 80 byte. Jadi kunci harus diperbarui pada tiap login.
-
-## Discovery jaringan lokal
-
-Untuk menemukan V380 dan membaca device ID tanpa login:
-
-```sh
-python3 tools/discover.py 192.168.0.0/24 192.168.18.0/24
-```
-
-Pemindaian memeriksa TCP 8800/554 dan mengirim discovery V380 UDP 10008. Maksimal 32 pemeriksaan berjalan bersamaan, hanya pada subnet IPv4 privat /24 atau lebih kecil. Discovery UDP lintas router dapat gagal meskipun koneksi TCP kamera bekerja; dalam kasus itu device ID perlu diambil dari aplikasi V380.
-
-## Akses dari luar rumah
-
-Pilih **Cloud V380 · luar rumah** pada pengaturan kamera untuk menggunakan device ID, username, dan password kamera yang tersimpan. Mode `cloud` meminta alamat relay ke layanan dispatch V380 dan membuka koneksi TCP 8800 ke relay tersebut. IP rumah disimpan agar mudah kembali ke mode LAN, tetapi tidak dipakai saat mode cloud aktif. Mode ini tidak memerlukan port forwarding pada router rumah.
-
-Permintaan discovery relay menggunakan `http://dispa1.av380.net:8001/api/v1/get_stream_server` dan berisi device ID, platform, timestamp, serta signature. Kredensial kamera dikirim dalam format autentikasi protokol V380 ke relay yang dipilih. Video dalam mode ini melewati infrastruktur V380; tidak terbatas pada jaringan rumah.
-
-Status validasi (14 Oktober 2026): keempat kamera sudah berhasil login dan streaming melalui relay internet dari jaringan di luar rumah. Snapshot dan MJPEG masing-masing kamera sudah diverifikasi: RuangTamu, Teras1, dan Teras2 pada 1280×720; Kitchen pada 640×480. Konfigurasi saat ini memakai mode `cloud`. Pilih V380 · jaringan rumah untuk kembali memakai alamat IP lokal saat berada di rumah. Resolusi mode cloud dibaca dari gambar hasil decoder karena respons relay memiliki format berbeda dari respons LAN. Pencarian relay, fallback server, pembatalan, autentikasi, tiket sesi, dan format video juga diuji melalui 14 tes lokal.
-
-## Rekam per menit, upload, dan playback (rclone)
-
-Tambahkan blok `recording` di `config.json` (lihat `config.example.json`). Server memotong stream setiap `segmentSeconds` (default 60) menjadi file MP4 `cam<deviceId>_YYYYMMDD_HHMMSS.mp4` di folder `recordings/` tanpa re-encode (`-c:v copy` untuk H.264/HEVC, tanpa encoding video ulang), mengunggahnya dengan **rclone**, lalu menghapus file lokal setelah berhasil (`keepLocal: true` untuk menyimpannya). Pemotongan terjadi pada keyframe berikutnya, jadi durasi bisa sedikit lebih dari 60 detik. Upload yang gagal diulang dengan backoff; file sisa dari proses sebelumnya diunggah saat server start. Kamera tertentu dapat dikecualikan dengan `"record": false`. Status (`recording.segments/uploaded/pending/error`) tampil di `/api/cameras`.
-
-### Tujuan: `destination`
-
-```json
-"recording": {"enabled": true, "segmentSeconds": 60, "destination": "gdrive",
-  "rclone": {"gdrive": "gdrive:cctv", "onedrive": "onedrive:cctv"}}
-```
-
-- `"gdrive"` / `"onedrive"`: memakai remote rclone yang tertulis di `rclone.gdrive` / `rclone.onedrive` (format `remote:folder`). Hanya yang dipilih yang dipakai. Isi bebas, termasuk path folder lokal, mis. folder OneDrive yang disinkronkan aplikasinya.
-- `"local"`: hanya simpan di `recordings/`.
-- `rclone.bin` (atau env `RCLONE_PATH`) mengatur lokasi biner bila tidak ada di PATH.
-
-Pasang dan siapkan rclone sekali: `brew install rclone`, lalu `rclone config` untuk membuat remote (`gdrive` bertipe Google Drive, `onedrive` bertipe Microsoft OneDrive). Autentikasi dan token dikelola rclone, bukan aplikasi ini. Cek dengan `rclone lsd gdrive:`.
-
-Playback (menu **Rekaman** di sidebar) membaca dari tujuan yang sama: daftar lewat `rclone lsjson`, video lewat `rclone cat --offset/--count` sehingga seek (HTTP Range) tetap bekerja tanpa mengunduh seluruh file. Pilih kamera, tanggal, dan rentang jam; daftar diurutkan terbaru dulu dengan paging 50 rekaman. Segmen berikutnya (lebih baru) diputar otomatis. API: `GET /api/recordings?camera=<id|all>&date=YYYY-MM-DD&from=HH:MM&to=HH:MM&page=1&size=50` dan `GET /recordings/<cam…_YYYYMMDD_HHMMSS.mp4>`. Kamera MJPEG (mis. Kitchen) direkam sebagai H.264 agar dapat diputar di browser.
-
-### Audio
-
-Rekaman menyertakan audio bila kamera mengirimnya (G.711 A-law 8 kHz mono, didekripsi dengan kunci sesi yang sama, lalu di-encode AAC 32 kbps). Kamera tanpa mikrofon direkam tanpa track audio. Matikan dengan `recording.audio: false` atau `"audio": false` pada kamera tertentu. Live view di browser tetap tanpa suara.
-
-### Kontrol kamera
-
-- **PTZ:** tombol panah di pojok kanan bawah video (tahan untuk bergerak); `POST /api/cameras/<id>/ptz` dengan `{"direction":"up|down|left|right|stop"}`. Server mengirim stop otomatis bila tidak ada perintah baru selama 1,5 detik.
-- **Suara live:** tombol 🔇/🔊 pada kartu kamera yang mengirim audio.
-- **Push to talk (eksperimental, belum terverifikasi):** tahan tombol 🎤 untuk mengirim suara mikrofon ke kamera (G.711 A-law 8 kHz, paket 60 ms ke `POST /api/cameras/<id>/talk`). Protokol talkback V380 tidak terdokumentasi; formatnya meniru frame audio yang dikirim kamera dan belum dikonfirmasi pada hardware. Bila kamera tidak bersuara, format paket di `V380Client.talk` perlu disesuaikan dengan tangkapan trafik app V380.
-
-## Docker
-
-Image menyertakan Node.js 22, FFmpeg (termasuk libx264), rclone, Python untuk discovery, dan zona waktu Asia/Jakarta. Jalankan Docker Desktop dahulu, kemudian dari folder proyek:
-
-```sh
-npm run docker:up
-```
-
-Buka **http://localhost:3381** pada host atau **http://<IP-host>:3381** dari perangkat lain. Port Docker menerima koneksi pada semua alamat IPv4 host (`0.0.0.0`). Perintah ini menyiapkan data Docker pada pemakaian pertama dan menjalankan Compose dengan port yang terpisah dari `npm start` di 3380.
-
-Konfigurasi Docker disalin sekali dari `config.json` ke `docker-data/config/config.json`. Ubah salinan ini untuk mengatur kamera atau recording di Docker; menjalankan ulang tidak menimpa perubahan. Nilai `recording.enabled` mengikuti konfigurasi sumber, termasuk jika recording sedang dinonaktifkan. Folder konfigurasi dipasang sebagai volume direktori agar penyimpanan pengaturan melalui UI (atomic rename) tetap bekerja.
-
-Data persisten:
-
-- `docker-data/config/`: konfigurasi kamera khusus Docker.
-- `docker-data/recordings/`: rekaman dan antrean upload Docker.
-- `docker-data/rclone/`: konfigurasi/token rclone Docker; helper menyalin konfigurasi rclone host jika sudah tersedia.
-- `docker-data/storage.compose.json`: mount tambahan untuk folder sinkronisasi lokal, misalnya OneDrive. Helper memetakan path host ke path container tanpa mengubah konfigurasi host. Folder tersebut harus tetap tersedia di mesin yang menjalankan Docker.
-
-`docker-data/`, konfigurasi rahasia, dan rekaman tidak masuk Git atau image Docker. UID/GID container mengikuti pengguna yang menjalankan helper agar volume dapat ditulis. Rclone memakai konfigurasi yang writable agar refresh token tetap tersimpan. Jika remote rclone belum dibuat:
-
-```sh
-node tools/docker.js run --rm viewer rclone config
-```
-
-Untuk port lain, ubah `VIEWER_PORT` di `docker-data/compose.env`. Menjalankan Docker di komputer lain memerlukan konfigurasi kamera, remote rclone, dan folder storage yang sesuai untuk komputer itu. Cloud V380 memakai koneksi keluar dari container; mode LAN memerlukan jaringan Docker yang dapat menjangkau IP kamera. Discovery UDP broadcast dari Docker Desktop dapat tidak menyeberang ke LAN; jalankan `tools/discover.py` pada host bila perlu.
-
-```sh
-npm run docker:logs
-node tools/docker.js ps
-node tools/docker.js exec viewer npm test
-npm run docker:down
-```
-
-`docker:down` menghentikan container dan mempertahankan data pada folder host. Untuk membangun ulang setelah perubahan kode, jalankan `npm run docker:up` lagi. Pengaturan server `HOST`, `PORT`, `PUBLIC_PORT`, dan `CONFIG_PATH` dipakai oleh Compose; `npm start` tanpa variabel ini tetap memakai konfigurasi dan alamat localhost semula.
-
-### Google Drive dengan rclone di Docker
-
-Compose tersedia di `compose.yaml`. Persiapkan volume sekali dengan `node tools/docker.js setup`, kemudian jalankan `npm run docker:up`. Helper juga memasukkan `docker-data/compose.env` (UID/GID dan port) serta `docker-data/storage.compose.json` (mount storage tambahan). Bentuk perintah Compose langsung yang setara:
+Konfigurasi Docker yang sudah ada tetap memakai `docker-data/config/config.json`, `docker-data/recordings`, `docker-data/rclone/rclone.conf`, `docker-data/compose.env`, dan overlay penyimpanan/perangkat yang sama.
 
 ```sh
 docker compose --env-file docker-data/compose.env \
-  -f compose.yaml -f docker-data/storage.compose.json up -d --build
+  -f compose.yaml \
+  -f docker-data/storage.compose.json \
+  -f docker-data/hardware.compose.json \
+  up -d --build
 ```
 
-Cara paling mudah menghubungkan Google Drive adalah melakukan OAuth di Mac, dengan file konfigurasi yang langsung digunakan container:
+Viewer tersedia di `http://localhost:3381`. Image branch ini bernama `v380-viewer:rust`. Compose memakai project/service yang sama, sehingga `up` mengganti container viewer yang sedang berjalan. File konfigurasi dan rekaman dipertahankan.
+
+Untuk instalasi baru atau untuk CLI:
 
 ```sh
-rclone --config ./docker-data/rclone/rclone.conf config
+cargo run -- docker setup
+cargo run -- docker up -d --build
+cargo run -- docker logs -f
+cargo run -- docker down
 ```
 
-Pilih `n` (remote baru), beri nama `gdrive`, dan pilih storage `drive` (Google Drive). Gunakan OAuth client ID dan client secret milik sendiri: buat sesuai [panduan rclone](https://rclone.org/drive/#making-your-own-client-id), aktifkan Google Drive API, dan pilih tipe aplikasi Desktop. Dokumentasi rclone saat ini merekomendasikan client ID sendiri karena client bersama akan dihentikan selama 2026.
+CLI menyiapkan folder berizin privat, menyalin konfigurasi/rclone jika belum ada, dan membuat overlay `/dev/dri/renderD128` serta grup render jika perangkat tersedia. Konfigurasi yang sudah ada tidak ditimpa.
 
-Untuk scope, pilih `drive.file` (biasanya pilihan 3): rclone dapat upload dan playback file/folder yang dibuatnya. Jika perlu mengakses folder/file yang sebelumnya dibuat di luar rclone, pilih scope `drive` (biasanya pilihan 1). Kosongkan service-account file; pilih tidak untuk advanced config, ya untuk autentikasi browser, dan tidak untuk Shared Drive bila memakai My Drive pribadi. Login ke akun Google tujuan dan simpan remote. Masukkan client secret serta token hanya ke prompt rclone, bukan ke `config.json` kamera.
+## Pengembangan lokal
 
-Verifikasi dari container dan buat folder tujuan:
+Gunakan Rust 1.99, FFmpeg, dan rclone jika memakai penyimpanan cloud. Frontend menggunakan `wasm-bindgen-cli` 0.2.105, sama dengan versi crate yang dikunci.
 
 ```sh
-node tools/docker.js exec viewer rclone listremotes
-node tools/docker.js exec viewer rclone mkdir gdrive:v380-recordings
-node tools/docker.js exec viewer rclone lsf gdrive:v380-recordings
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.105 --locked
+cargo build --release -p cctv-ui --target wasm32-unknown-unknown
+wasm-bindgen --target web --out-dir public/pkg \
+  target/wasm32-unknown-unknown/release/cctv_ui.wasm
+cp config.example.json config.json
+# Isi password kamera dan tujuan rekaman pada config.json.
+cargo run -- serve
 ```
 
-Edit **hanya blok `recording`** di `docker-data/config/config.json` seperti di bawah. Pertahankan array `cameras` yang sudah berisi kredensial kamera Anda. `config.gdrive.example.json` adalah contoh lengkap dengan placeholder, bukan pengganti konfigurasi kamera yang sudah berjalan.
+Server lokal mendengarkan `127.0.0.1:3380`. `CONFIG_PATH`, `HOST`, `PORT`, `PUBLIC_PORT`, `PUBLIC_DIR`, `FFMPEG_PATH`, `RCLONE_PATH`, dan `RCLONE_CONFIG` dapat diatur melalui environment.
 
-```json
-"recording": {
-  "enabled": true,
-  "segmentSeconds": 60,
-  "dir": "/app/recordings",
-  "keepLocal": false,
-  "destination": "gdrive",
-  "rclone": {"gdrive": "gdrive:v380-recordings"}
-}
-```
+## Fitur dan konfigurasi
 
-Kemudian restart agar pengaturan recording dimuat:
+- V380 LAN, cloud V380, dan RTSP; pemilihan HD/SD menggunakan stream kamera.
+- Live view, snapshot JPEG, fullscreen, pengaturan kamera, reconnect, PTZ dengan stop otomatis, audio G.711 A-law, dan push-to-talk eksperimental.
+- Playback MP4 dari lokal, Google Drive, atau OneDrive; filter kamera/tanggal/jam, pagination, HTTP byte ranges, dan pemutaran klip berikutnya.
+- Rekaman H.264/HEVC memakai stream copy tanpa encoding video ulang. Audio V380 dimux ke AAC 32 kbit/s.
+- Kamera MJPEG dikonversi ke H.264 pada resolusi asli. Encoder otomatis menguji Intel VA-API dan memakai CPU jika GPU tidak tersedia atau gagal. CPU memakai `ultrafast`, CRF 22, satu thread; GPU memakai QP 22. Skala CRF dan QP berbeda.
+- Preview H.264/HEVC hanya didekode saat ada penonton/snapshot, maksimal 640 piksel dan default 5 fps. Preview MJPEG memakai JPEG kamera langsung. Membuka playback melepas stream preview live.
+- Koneksi kamera, preview, dan recorder ditangani terpisah. Antrean input memiliki batas byte; recorder yang penuh menutup segmen dan pulih pada keyframe berikutnya. Shutdown menutup input, memfinalisasi segmen, membatasi waktu tunggu, dan mereap proses FFmpeg.
+- File MP4 dibuka di folder `.partial-*` yang terpisah. Hanya file dengan atom MP4 lengkap yang masuk antrean upload. Upload gagal diulang; file lokal dipertahankan sampai berhasil. File yang belum lengkap dipertahankan untuk pemulihan.
+
+Lihat `config.example.json`. Field per kamera: `name`, `ip`, `deviceId`, `username`, `password`, `v380Port` (default 8800), `mode` (`v380`/`cloud`/`rtsp`), `quality` (`hd`/`sd`), `rtspUrl`, `record`, `audio`, `previewFps` (1–10), `recordingEncoder` (`auto`/`cpu`), `recordingCrf` (0–51), dan `recordingFps` (1–60).
+
+MJPEG memakai estimasi frame rate dari kedatangan frame selama tiga detik pertama, timestamp waktu kedatangan, dan output VFR. Jitter jaringan tetap dapat memengaruhi timing. Rekaman tidak menambah detail yang tidak tersedia pada sumber kamera.
+
+Blok `recording`: `enabled`, `destination` (`local`/`gdrive`/`onedrive`), `dir`, `segmentSeconds` (default 60), `audio`, `keepLocal`, serta `rclone.gdrive`/`rclone.onedrive`. Keyframe menentukan batas segmen; durasinya dapat sedikit melewati interval. Rclone membaca konfigurasi autentikasinya sendiri.
+
+Cloud V380 memakai dispatch `http://dispa1.av380.net:8001/api/v1/get_stream_server` dan relay TCP port 8800. Mode ini dipilih secara eksplisit; kegagalan LAN tidak otomatis memindahkan kredensial ke cloud. Dukungan H.265/communication version 21 mengikuti protokol sebelumnya dan memerlukan validasi pada perangkat yang memakainya.
+
+## Retensi dan diagnostik
+
+`recording.retentionDays` (default 0, nonaktif) dan `retentionCheckSeconds` (default 3600) dapat dioverride oleh `RECORDING_RETENTION_DAYS` dan `RECORDING_RETENTION_CHECK_SECONDS`. Environment kosong mempertahankan konfigurasi; nilai 0 mematikan retensi.
+
+Retensi hanya menghapus rekaman dengan nama/tanggal valid dari kamera terkonfigurasi. Folder aktif, symlink, file rusak, file yang masih diunggah, dan file lokal yang belum ditemukan di cloud dipertahankan. Penghapusan cloud hanya menargetkan satu file di folder tujuan, tanpa rekursi.
+
+Endpoint tetap kompatibel:
+
+| Endpoint | Fungsi |
+| --- | --- |
+| `GET /api/cameras` | Status kamera, `hasPassword`, recorder, preview, reconnect, statistik paket |
+| `POST /api/cameras/{id}` | Simpan konfigurasi dan reconnect; password kosong dipertahankan |
+| `POST /api/cameras/{id}/reconnect` | Reconnect manual |
+| `POST /api/cameras/{id}/ptz` | `{ "direction": "up/down/left/right/stop" }` |
+| `POST /api/cameras/{id}/talk` | G.711 A-law, 1–480 byte, `application/octet-stream` |
+| `GET /stream/{id}` | Multipart MJPEG |
+| `GET /audio/{id}` | Stream G.711 A-law |
+| `GET /snapshot/{id}` | JPEG baru, timeout 10 detik |
+| `GET /api/recordings` | Filter `date`, `camera`, `from`, `to`, `page`, `size` |
+| `GET /recordings/{name}` | MP4 dengan byte ranges |
+| `GET /api/retention` | Status retensi |
+
+Password dan URL RTSP berkredensial tidak dikembalikan oleh API. Stderr FFmpeg tidak dipublikasikan karena dapat berisi kredensial. Konfigurasi ditulis atomik dengan izin privat. Request POST lintas origin ditolak. Viewer belum menyediakan login pengguna; gunakan akses jaringan yang sesuai untuk viewer pribadi.
+
+## Discovery LAN
 
 ```sh
-node tools/docker.js restart viewer
-npm run docker:logs
+cargo run -- discover 192.168.0.0/24
 ```
 
-Rekaman diunggah setelah tiap segmen selesai; status antrean ada di `/api/cameras`. Token tersimpan persisten di `docker-data/rclone/rclone.conf` dan rclone memperbaruinya otomatis. `keepLocal: false` menghapus segmen lokal setelah upload berhasil. Selama gagal upload, segmen tetap di disk dan dicoba lagi.
+Discovery memakai UDP V380 dan scan TCP port 8800/554, maksimum 32 koneksi sekaligus, hanya pada subnet IPv4 privat `/24` atau lebih kecil yang disebutkan.
 
-Bila melakukan config dari container tanpa browser, jawab tidak pada autentikasi otomatis lalu ikuti [remote setup rclone](https://rclone.org/remote_setup/). Jalankan `rclone authorize` pada komputer dengan browser memakai client OAuth yang sama, dan masukkan hasilnya ke prompt container. Config pada host dengan path volume di atas menghindari langkah manual ini.
-
-Jika muncul `didn't find section in config file` untuk `gdrive:cctv`, cocokkan nama remote dengan hasil:
+## Pengujian
 
 ```sh
-rclone --config ./docker-data/rclone/rclone.conf listremotes
+cargo test -- --test-threads=1
+cargo test -p cctv-ui
+cargo check -p cctv-ui --target wasm32-unknown-unknown
+cargo fmt --all -- --check
 ```
 
-Bila remote Google Drive bernama `titus`, gunakan `titus:cctv` pada `recording.rclone.gdrive`, atau tambahkan alias pada file rclone yang sama:
+Tes mencakup cuplikan terenkripsi kamera, autentikasi, fragmentasi TCP, pembatalan, JPEG/HEVC, PTZ/talkback, batas buffer, finalisasi MP4, AAC, durasi MJPEG, keamanan API, byte ranges, retensi, dan pemulihan upload. Tes video memakai FFmpeg; hasil pengujian protokol memakai server TCP lokal, bukan kredensial kamera sebenarnya.
 
-```ini
-[gdrive]
-type = alias
-remote = titus:
-```
-
-Container memakai `docker-data/rclone/rclone.conf` melalui `RCLONE_CONFIG`. Untuk menjalankan viewer langsung di host memakai file yang sama:
+Untuk smoke test browser dengan kamera sintetis dan MP4 lokal:
 
 ```sh
-RCLONE_CONFIG="$PWD/docker-data/rclone/rclone.conf" npm start
+cargo run --example browser_fixture
+# http://127.0.0.1:3390
 ```
-
-
-### Integritas rekaman MP4
-
-File yang masih direkam disimpan dalam direktori `.partial-*` terpisah untuk setiap proses FFmpeg. Segmen dipindahkan ke folder rekaman utama dan masuk antrean upload setelah penutupan serta pemeriksaan struktur MP4 (`moov` dan `mdat`) berhasil. File tidak lengkap yang tersisa setelah crash/restart disimpan untuk diagnosis dan tidak otomatis diupload. Server menunggu finalisasi recorder saat shutdown; metadata MP4 ditempatkan di awal file dengan `faststart` untuk playback.
-
-Jika file lama menunjukkan `moov atom not found`, file itu belum selesai atau terpotong. Perbaikan recorder berlaku pada rekaman berikutnya; file lama tidak otomatis dapat dipulihkan. Pemulihan payload tanpa metadata dapat kehilangan audio, sebagian frame, dan informasi waktu, sehingga hasilnya harus disimpan sebagai salinan terpisah.
-
-### Retensi rekaman
-
-Retensi berdasarkan waktu mulai rekaman pada nama `cam<deviceId>_YYYYMMDD_HHMMSS.mp4`, mengikuti zona waktu recorder. Retensi default **nonaktif** (`0`); nilai positif adalah jumlah hari yang dipertahankan, misalnya 7 hari:
-
-```json
-"recording": {
-  "enabled": true,
-  "destination": "gdrive",
-  "dir": "/app/recordings",
-  "rclone": {"gdrive": "gdrive:cctv"},
-  "retentionDays": 7,
-  "retentionCheckSeconds": 3600
-}
-```
-
-Tambahkan dua properti retensi pada blok recording yang sudah ada tanpa mengganti konfigurasi kamera. Cleanup berlaku pada tujuan yang dipilih (`local`, Google Drive, OneDrive, atau folder sinkronisasi rclone) dan salinan lokal yang sudah terunggah. Cleanup tetap dapat berjalan saat recording dinonaktifkan jika retensi masih diaktifkan.
-
-Environment variable mengalahkan config; nilai kosong memakai config, sedangkan `0` secara eksplisit mematikan retensi:
-
-```sh
-RECORDING_RETENTION_DAYS=7 RECORDING_RETENTION_CHECK_SECONDS=3600 npm start
-```
-
-Untuk Docker, tambahkan ke `docker-data/compose.env`:
-
-```dotenv
-RECORDING_RETENTION_DAYS=7
-RECORDING_RETENTION_CHECK_SECONDS=3600
-```
-
-Lalu jalankan `npm run docker:up` untuk memuat environment baru. Jika hanya mengubah `docker-data/config/config.json`, gunakan `node tools/docker.js restart viewer`. Cleanup pertama berjalan saat startup, lalu setiap interval (default satu jam). Perubahan nilai dapat mulai menghapus rekaman lama pada startup berikutnya.
-
-Hanya file MP4 di folder tujuan utama dengan device ID kamera yang terdaftar dan timestamp valid yang diproses. File lebih tua dari batas umur dihapus satu per satu melalui `rclone deletefile`; aplikasi tidak memanggil purge atau membersihkan trash Google Drive. Folder lain, file nonrekaman, salinan recovery, symlink lokal, MP4 yang belum lengkap, dan upload yang masih antre tetap dipertahankan. Salinan lokal tujuan cloud yang belum ditemukan di cloud juga dipertahankan agar rekaman belum terunggah tidak hilang. Periksa hasil, jumlah file yang dihapus, dan error melalui **GET `/api/retention`**.
-
-
-### Rekaman pada mesin dengan CPU terbatas
-
-Rekaman H.264/HEVC tetap memakai stream asli. Preview H.264 hanya didekode ketika ada penonton atau permintaan snapshot, dengan lebar maksimal 640 piksel dan default 5 fps. Kamera JPEG memakai frame sumber langsung sebagai preview. Preview tidak menjadi sumber watchdog kamera: kegagalan preview tidak menghentikan recorder. Decoder lama diberi batas dua detik sebelum SIGKILL, dan decoder pengganti menunggu proses lama selesai.
-
-Kamera MJPEG direkam ke H.264. Default `recordingEncoder: "auto"` menguji VA-API terlebih dahulu dan memakai CPU jika tidak tersedia atau encoder gagal saat berjalan. Docker helper membuat overlay perangkat `/dev/dri/renderD128` dan grup render hanya jika perangkat tersedia di host; image menyertakan Intel media driver. Encoder CPU memakai `ultrafast`, satu thread, dan `recordingCrf: 22`; VA-API memakai QP 22 (skalanya berbeda dari CRF). `recordingEncoder: "cpu"` menonaktifkan GPU. Hardware dan CPU mempertahankan resolusi sumber. Jangan menaikkan resolusi untuk menambah detail: sumber Kitchen saat ini 640×480.
-
-`previewFps` (default 5, batas 1–10), `recordingCrf` (CPU, 0–51), `recordingEncoder` (`auto` atau `cpu`), dan `recordingFps` dapat diisi per kamera pada konfigurasi. Untuk MJPEG, frame rate default diperkirakan dari kedatangan frame selama tiga detik pertama; timestamp menggunakan waktu kedatangan dan output VFR untuk menghindari penggandaan ke 25 fps. Ini belum menggunakan timestamp asli perangkat, sehingga jitter jaringan masih dapat memengaruhi timing.
-
-Recorder menutup segmen ketika buffer penuh dan menunggu keyframe berikutnya setelah proses lama selesai. Data yang tidak direkam dihitung sebagai `recording.droppedFrames`; restart recorder tersedia sebagai `recording.restarts`, encoder aktif sebagai `recording.encoder`. Recorder yang macet dipulihkan terpisah dari preview. Status `reconnects` dan `previewError` membantu membedakan kegagalan kamera dan preview; reconnect sumber memakai backoff 3–30 detik. Gangguan jaringan tetap dapat meninggalkan celah rekaman; pemulihan tidak merekonstruksi frame yang tidak diterima.
-
-`streamStats` melaporkan paket video/audio, frame lengkap, fragment tidak lengkap, byte diterima, dan waktu paket terakhir. `lastConnectionError` mempertahankan alasan reconnect terakhir saat koneksi baru sedang dibuka. Diagnostik tidak memuat password dan tidak otomatis mengalihkan kamera LAN ke cloud.

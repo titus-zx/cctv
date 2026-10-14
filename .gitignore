@@ -1,3 +1,5 @@
+/target/
+/public/pkg/
 config.json
 config.json.tmp
 *.pcap
@@ -6,8 +8,6 @@ config.json.tmp
 *.hevc
 *.jpg
 *.bin
-node_modules/
-__pycache__/
 .DS_Store
 recordings/
 docker-data/
