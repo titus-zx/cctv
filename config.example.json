@@ -9,7 +9,9 @@
     "rclone": {
       "gdrive": "gdrive:cctv",
       "onedrive": "onedrive:cctv"
-    }
+    },
+    "retentionDays": 0,
+    "retentionCheckSeconds": 3600
   },
   "cameras": [
     {

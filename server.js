@@ -6,9 +6,12 @@ const net = require('node:net');
 const { Viewer } = require('./lib/viewer');
 const { createRecording } = require('./lib/recorder');
 const { createStore, NAME } = require('./lib/playback');
+const { createRetention, retentionSettings } = require('./lib/retention');
 const configPath = path.resolve(process.env.CONFIG_PATH || path.join(__dirname, 'config.json'));
 const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+const retentionConfig = retentionSettings(cfg.recording);
 const recording = createRecording(cfg, __dirname);
+const retention = createRetention(cfg, __dirname, recording?.queue, retentionConfig);
 const store = createStore(cfg, __dirname);
 const viewers = cfg.cameras.map(camera => new Viewer(camera, recording?.make(camera)));
 const port = Number(process.env.PORT || cfg.port || 3380);
@@ -34,6 +37,8 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')
       return json(res, 200, viewers.map((viewer,id) => ({id,...viewer.status()})));
+    if (req.method === 'GET' && url.pathname === '/api/retention')
+      return json(res, 200, retention ? {enabled:true,...retention.status()} : {enabled:false,...retentionConfig});
     if (req.method === 'GET' && url.pathname === '/api/recordings') {
       if (!store) return json(res, 200, {enabled: false, items: []});
       const items = await store.list(url.searchParams.get('date'));
@@ -120,7 +125,7 @@ const server = http.createServer(async (req, res) => {
   } catch (error) { if (!res.headersSent) json(res,400,{error:error.message}); else res.end(); }
 });
 server.on('error', error => {console.error(`Server gagal: ${error.code || 'error'}`);for(const viewer of viewers)viewer.stop();process.exitCode=1;});
-server.listen(port,process.env.HOST || '127.0.0.1',() => {console.log(`V380 Viewer: http://localhost:${publicPort}`);for(const viewer of viewers)viewer.start();});
+server.listen(port,process.env.HOST || '127.0.0.1',() => {console.log(`V380 Viewer: http://localhost:${publicPort}`);for(const viewer of viewers)viewer.start();retention?.start();});
 let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
@@ -128,7 +133,7 @@ async function shutdown() {
   for (const viewer of viewers) viewer.stop();
   server.close();
   const deadline = setTimeout(() => process.exit(1), 12000); deadline.unref();
-  await Promise.allSettled(viewers.map(viewer => viewer.recorder?.stop()));
+  await Promise.allSettled([...viewers.map(viewer => viewer.recorder?.stop()), retention?.stop()]);
   clearTimeout(deadline); process.exit(0);
 }
 process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

@@ -14,6 +14,8 @@ services:
       CONFIG_PATH: /app/runtime/config.json
       RCLONE_CONFIG: /app/rclone/rclone.conf
       HOME: /tmp
+      RECORDING_RETENTION_DAYS: "${RECORDING_RETENTION_DAYS:-}"
+      RECORDING_RETENTION_CHECK_SECONDS: "${RECORDING_RETENTION_CHECK_SECONDS:-}"
     ports:
       - "127.0.0.1:${VIEWER_PORT:-3381}:3380"
     volumes:

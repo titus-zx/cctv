@@ -191,3 +191,37 @@ RCLONE_CONFIG="$PWD/docker-data/rclone/rclone.conf" npm start
 File yang masih direkam disimpan dalam direktori `.partial-*` terpisah untuk setiap proses FFmpeg. Segmen dipindahkan ke folder rekaman utama dan masuk antrean upload setelah penutupan serta pemeriksaan struktur MP4 (`moov` dan `mdat`) berhasil. File tidak lengkap yang tersisa setelah crash/restart disimpan untuk diagnosis dan tidak otomatis diupload. Server menunggu finalisasi recorder saat shutdown; metadata MP4 ditempatkan di awal file dengan `faststart` untuk playback.
 
 Jika file lama menunjukkan `moov atom not found`, file itu belum selesai atau terpotong. Perbaikan recorder berlaku pada rekaman berikutnya; file lama tidak otomatis dapat dipulihkan. Pemulihan payload tanpa metadata dapat kehilangan audio, sebagian frame, dan informasi waktu, sehingga hasilnya harus disimpan sebagai salinan terpisah.
+
+### Retensi rekaman
+
+Retensi berdasarkan waktu mulai rekaman pada nama `cam<deviceId>_YYYYMMDD_HHMMSS.mp4`, mengikuti zona waktu recorder. Retensi default **nonaktif** (`0`); nilai positif adalah jumlah hari yang dipertahankan, misalnya 7 hari:
+
+```json
+"recording": {
+  "enabled": true,
+  "destination": "gdrive",
+  "dir": "/app/recordings",
+  "rclone": {"gdrive": "gdrive:cctv"},
+  "retentionDays": 7,
+  "retentionCheckSeconds": 3600
+}
+```
+
+Tambahkan dua properti retensi pada blok recording yang sudah ada tanpa mengganti konfigurasi kamera. Cleanup berlaku pada tujuan yang dipilih (`local`, Google Drive, OneDrive, atau folder sinkronisasi rclone) dan salinan lokal yang sudah terunggah. Cleanup tetap dapat berjalan saat recording dinonaktifkan jika retensi masih diaktifkan.
+
+Environment variable mengalahkan config; nilai kosong memakai config, sedangkan `0` secara eksplisit mematikan retensi:
+
+```sh
+RECORDING_RETENTION_DAYS=7 RECORDING_RETENTION_CHECK_SECONDS=3600 npm start
+```
+
+Untuk Docker, tambahkan ke `docker-data/compose.env`:
+
+```dotenv
+RECORDING_RETENTION_DAYS=7
+RECORDING_RETENTION_CHECK_SECONDS=3600
+```
+
+Lalu jalankan `npm run docker:up` untuk memuat environment baru. Jika hanya mengubah `docker-data/config/config.json`, gunakan `node tools/docker.js restart viewer`. Cleanup pertama berjalan saat startup, lalu setiap interval (default satu jam). Perubahan nilai dapat mulai menghapus rekaman lama pada startup berikutnya.
+
+Hanya file MP4 di folder tujuan utama dengan device ID kamera yang terdaftar dan timestamp valid yang diproses. File lebih tua dari batas umur dihapus satu per satu melalui `rclone deletefile`; aplikasi tidak memanggil purge atau membersihkan trash Google Drive. Folder lain, file nonrekaman, salinan recovery, symlink lokal, MP4 yang belum lengkap, dan upload yang masih antre tetap dipertahankan. Salinan lokal tujuan cloud yang belum ditemukan di cloud juga dipertahankan agar rekaman belum terunggah tidak hilang. Periksa hasil, jumlah file yang dihapus, dan error melalui **GET `/api/retention`**.
