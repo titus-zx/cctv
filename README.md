@@ -164,3 +164,30 @@ npm run docker:logs
 Rekaman diunggah setelah tiap segmen selesai; status antrean ada di `/api/cameras`. Token tersimpan persisten di `docker-data/rclone/rclone.conf` dan rclone memperbaruinya otomatis. `keepLocal: false` menghapus segmen lokal setelah upload berhasil. Selama gagal upload, segmen tetap di disk dan dicoba lagi.
 
 Bila melakukan config dari container tanpa browser, jawab tidak pada autentikasi otomatis lalu ikuti [remote setup rclone](https://rclone.org/remote_setup/). Jalankan `rclone authorize` pada komputer dengan browser memakai client OAuth yang sama, dan masukkan hasilnya ke prompt container. Config pada host dengan path volume di atas menghindari langkah manual ini.
+
+Jika muncul `didn't find section in config file` untuk `gdrive:cctv`, cocokkan nama remote dengan hasil:
+
+```sh
+rclone --config ./docker-data/rclone/rclone.conf listremotes
+```
+
+Bila remote Google Drive bernama `titus`, gunakan `titus:cctv` pada `recording.rclone.gdrive`, atau tambahkan alias pada file rclone yang sama:
+
+```ini
+[gdrive]
+type = alias
+remote = titus:
+```
+
+Container memakai `docker-data/rclone/rclone.conf` melalui `RCLONE_CONFIG`. Untuk menjalankan viewer langsung di host memakai file yang sama:
+
+```sh
+RCLONE_CONFIG="$PWD/docker-data/rclone/rclone.conf" npm start
+```
+
+
+### Integritas rekaman MP4
+
+File yang masih direkam disimpan dalam direktori `.partial-*` terpisah untuk setiap proses FFmpeg. Segmen dipindahkan ke folder rekaman utama dan masuk antrean upload setelah penutupan serta pemeriksaan struktur MP4 (`moov` dan `mdat`) berhasil. File tidak lengkap yang tersisa setelah crash/restart disimpan untuk diagnosis dan tidak otomatis diupload. Server menunggu finalisasi recorder saat shutdown; metadata MP4 ditempatkan di awal file dengan `faststart` untuk playback.
+
+Jika file lama menunjukkan `moov atom not found`, file itu belum selesai atau terpotong. Perbaikan recorder berlaku pada rekaman berikutnya; file lama tidak otomatis dapat dipulihkan. Pemulihan payload tanpa metadata dapat kehilangan audio, sebagian frame, dan informasi waktu, sehingga hasilnya harus disimpan sebagai salinan terpisah.

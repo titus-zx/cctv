@@ -121,5 +121,14 @@ const server = http.createServer(async (req, res) => {
 });
 server.on('error', error => {console.error(`Server gagal: ${error.code || 'error'}`);for(const viewer of viewers)viewer.stop();process.exitCode=1;});
 server.listen(port,process.env.HOST || '127.0.0.1',() => {console.log(`V380 Viewer: http://localhost:${publicPort}`);for(const viewer of viewers)viewer.start();});
-function shutdown() {for(const viewer of viewers)viewer.stop();server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref();}
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  for (const viewer of viewers) viewer.stop();
+  server.close();
+  const deadline = setTimeout(() => process.exit(1), 12000); deadline.unref();
+  await Promise.allSettled(viewers.map(viewer => viewer.recorder?.stop()));
+  clearTimeout(deadline); process.exit(0);
+}
 process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

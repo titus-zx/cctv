@@ -61,3 +61,34 @@ test('MJPEG cameras are recorded as browser-playable H.264',{skip:spawnSync('ffm
   assert.equal(seen.length,1);
   assert.match(spawnSync('ffprobe',['-v','error','-show_entries','stream=codec_name','-of','csv=p=0',seen[0]]).stdout.toString(),/h264/);
 });
+
+test('incomplete MP4 is retained and never enters the startup upload queue',async()=>{
+  const {isFinalizedMp4,createRecording}=require('../lib/recorder');
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'incomplete-rec-'));
+  const name='cam123_20261014_140703.mp4';
+  const atom=(type,data)=>{const b=Buffer.alloc(8+data.length);b.writeUInt32BE(b.length);b.write(type,4);data.copy(b,8);return b;};
+  const file=path.join(dir,name);
+  fs.writeFileSync(file,Buffer.concat([atom('ftyp',Buffer.from('isom')),atom('mdat',Buffer.alloc(100))]));
+  assert.equal(isFinalizedMp4(file),false);
+  fs.mkdirSync(path.join(dir,'.partial-test'));
+  fs.writeFileSync(path.join(dir,'.partial-test',name),Buffer.from('unfinished'));
+  const recording=createRecording({recording:{enabled:true,destination:'local',dir}},dir);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(recording.queue.uploaded,0);assert.equal(recording.queue.pending.length,0);
+  assert.equal(fs.existsSync(file),true);
+  fs.rmSync(dir,{recursive:true,force:true});
+});
+test('recorder queues only finalized, decodable MP4 and stop waits for its trailer',{skip:spawnSync('ffmpeg',['-version']).error?'ffmpeg tidak ada':false},async()=>{
+  const {isFinalizedMp4}=require('../lib/recorder');
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'finalized-rec-'));
+  const gen=spawnSync('ffmpeg',['-loglevel','error','-f','lavfi','-i','testsrc=size=320x240:rate=10','-t','2','-g','10','-c:v','libx264','-pix_fmt','yuv420p','-f','h264','pipe:1'],{maxBuffer:1<<26});
+  const seen=[];const rec=new Recorder({deviceId:'126'},{dir,queue:{add:file=>{
+    assert.equal(isFinalizedMp4(file),true);assert.equal(path.dirname(file),dir);seen.push(file);
+  }}});
+  rec.start('h264');rec.write(gen.stdout);await rec.stop();
+  assert.equal(seen.length,1);
+  const decoded=spawnSync('ffmpeg',['-v','error','-i',seen[0],'-f','null','-'],{encoding:'utf8'});
+  assert.equal(decoded.status,0,decoded.stderr);
+  assert.equal(fs.readdirSync(dir).some(name=>name.startsWith('.partial-')),false);
+  fs.rmSync(dir,{recursive:true,force:true});
+});
