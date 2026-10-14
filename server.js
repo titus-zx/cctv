@@ -5,9 +5,11 @@ const path = require('node:path');
 const net = require('node:net');
 const { Viewer } = require('./lib/viewer');
 const { createRecording } = require('./lib/recorder');
+const { createStore, NAME } = require('./lib/playback');
 const configPath = path.join(__dirname, 'config.json');
 const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const recording = createRecording(cfg, __dirname);
+const store = createStore(cfg, __dirname);
 const viewers = cfg.cameras.map(camera => new Viewer(camera, recording?.make(camera)));
 const port = Number(process.env.PORT || cfg.port || 3380);
 const json = (res, code, data) => {res.writeHead(code, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
@@ -30,6 +32,31 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')
       return json(res, 200, viewers.map((viewer,id) => ({id,...viewer.status()})));
+    if (req.method === 'GET' && url.pathname === '/api/recordings') {
+      if (!store) return json(res, 200, {enabled: false, items: []});
+      const items = await store.list(url.searchParams.get('date'));
+      const names = new Map(viewers.map((v, id) => [String(v.camera.deviceId), {cameraId: id, camera: v.camera.name}]));
+      const wanted = url.searchParams.get('camera');
+      const minutes = key => { const m = /^(\d{2}):(\d{2})$/.exec(url.searchParams.get(key) || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+      const from = minutes('from') ?? 0, to = minutes('to') ?? 24 * 60 - 1; // 'to' covers the whole minute
+      const size = Math.min(200, Math.max(1, Number(url.searchParams.get('size')) || 50));
+      const matches = items.map(i => ({...i, ...names.get(i.deviceId)}))
+        .filter(i => wanted === null || wanted === 'all' || String(i.cameraId) === wanted)
+        .filter(i => { const d = new Date(i.start), m = d.getHours() * 60 + d.getMinutes(); return m >= from && m <= to; })
+        .sort((a, b) => a.start < b.start ? 1 : a.start > b.start ? -1 : 0); // newest first
+      const pages = Math.max(1, Math.ceil(matches.length / size)), page = Math.min(pages, Math.max(1, Number(url.searchParams.get('page')) || 1));
+      return json(res, 200, {enabled: true, total: matches.length, page, pages, size, items: matches.slice((page - 1) * size, page * size)});
+    }
+    const clip = url.pathname.match(/^\/recordings\/([^/]+)$/);
+    if (req.method === 'GET' && clip) {
+      const name = decodeURIComponent(clip[1]);
+      if (!store || !NAME.test(name)) return json(res, 404, {error: 'Rekaman tidak ditemukan.'});
+      const file = await store.open(name, req.headers.range);
+      if (!file) return json(res, 404, {error: 'Rekaman tidak ditemukan.'});
+      res.writeHead(file.status, {'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...file.headers});
+      if (!file.stream) return res.end();
+      res.on('close', () => file.stream.destroy()); return file.stream.pipe(res);
+    }
     const match = url.pathname.match(/^\/(stream|audio|snapshot|api\/cameras)\/(\d+)(?:\/(reconnect|ptz|talk))?$/);
     if (match) {
       const id = Number(match[2]), viewer = viewers[id];
@@ -81,7 +108,7 @@ const server = http.createServer(async (req, res) => {
       }
       return json(res,405,{error:'Metode tidak didukung.'});
     }
-    const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/style.css':'style.css'};
+    const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/playback.js':'playback.js','/style.css':'style.css'};
     const file = files[url.pathname];
     if (req.method !== 'GET' || !file) return json(res,404,{error:'Tidak ditemukan.'});
     const types = {'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'};

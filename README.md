@@ -74,3 +74,7 @@ Rekaman menyertakan audio bila kamera mengirimnya (G.711 A-law 8 kHz mono, didek
 - **PTZ:** tombol panah di pojok kanan bawah video (tahan untuk bergerak); `POST /api/cameras/<id>/ptz` dengan `{"direction":"up|down|left|right|stop"}`. Server mengirim stop otomatis bila tidak ada perintah baru selama 1,5 detik.
 - **Suara live:** tombol 🔇/🔊 pada kartu kamera yang mengirim audio.
 - **Push to talk (eksperimental, belum terverifikasi):** tahan tombol 🎤 untuk mengirim suara mikrofon ke kamera (G.711 A-law 8 kHz, paket 60 ms ke `POST /api/cameras/<id>/talk`). Protokol talkback V380 tidak terdokumentasi; formatnya meniru frame audio yang dikirim kamera dan belum dikonfirmasi pada hardware. Bila kamera tidak bersuara, format paket di `V380Client.talk` perlu disesuaikan dengan tangkapan trafik app V380.
+
+### Playback rekaman
+
+Menu **Rekaman** di sidebar memutar ulang rekaman dari tempat rekaman itu ditulis, sesuai `recording.destination`: folder OneDrive (`onedrive.dir`), `recordings/` (`local`), atau folder Google Drive (`drive`, daftar dan unduhan lewat Drive API). Pilih kamera dan tanggal, klik segmen untuk memutar; segmen berikutnya otomatis diputar. Seek didukung lewat HTTP Range. API: `GET /api/recordings?camera=<id|all>&date=YYYY-MM-DD` dan `GET /recordings/<cam…_YYYYMMDD_HHMMSS.mp4>`. File `.part` (sedang disalin) tidak tampil. Kamera MJPEG (mis. Kitchen) kini direkam sebagai H.264 agar dapat diputar di browser; rekaman MJPEG lama tidak dapat diputar di browser.

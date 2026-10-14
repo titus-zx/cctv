@@ -171,7 +171,7 @@ function render(camera) {
 }
 async function refresh() {
   try {
-    cameras = await api('/api/cameras');
+    cameras = await api('/api/cameras'); window.cameraList = cameras;
     cameras.forEach(render);
     document.querySelector('#total').textContent = cameras.length;
     document.querySelector('#camera-count').textContent = cameras.length;

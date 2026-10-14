@@ -64,3 +64,11 @@ test('recorder muxes A-law audio from fd 3 into the segments',{skip:spawnSync('f
   const probe=spawnSync('ffprobe',['-v','error','-show_entries','stream=codec_type','-of','csv=p=0',seen[0]]).stdout.toString();
   assert.match(probe,/video/);assert.match(probe,/audio/);
 });
+test('MJPEG cameras are recorded as browser-playable H.264',{skip:spawnSync('ffmpeg',['-version']).error?'ffmpeg tidak ada':false},async()=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'recm-'));
+  const gen=spawnSync('ffmpeg',['-loglevel','error','-f','lavfi','-i','testsrc=size=320x240:rate=10','-t','2','-c:v','mjpeg','-f','mjpeg','pipe:1'],{maxBuffer:1<<26});
+  const seen=[];const rec=new Recorder({deviceId:'125'},{dir,segmentSeconds:60,queue:{add:f=>seen.push(f)}});
+  rec.start('mjpeg');rec.write(gen.stdout);rec.stop();await new Promise(r=>setTimeout(r,2500));
+  assert.equal(seen.length,1);
+  assert.match(spawnSync('ffprobe',['-v','error','-show_entries','stream=codec_name','-of','csv=p=0',seen[0]]).stdout.toString(),/h264/);
+});
