@@ -4,9 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const net = require('node:net');
 const { Viewer } = require('./lib/viewer');
+const { createRecording } = require('./lib/recorder');
 const configPath = path.join(__dirname, 'config.json');
 const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-const viewers = cfg.cameras.map(camera => new Viewer(camera));
+const recording = createRecording(cfg, __dirname);
+const viewers = cfg.cameras.map(camera => new Viewer(camera, recording?.make(camera)));
 const port = Number(process.env.PORT || cfg.port || 3380);
 const json = (res, code, data) => {res.writeHead(code, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 async function body(req) {
@@ -62,7 +64,7 @@ const server = http.createServer(async (req, res) => {
         } else delete updated.rtspUrl;
         const previous = cfg.cameras[id]; cfg.cameras[id] = updated;
         try {saveConfig();} catch (error) {cfg.cameras[id] = previous; throw error;}
-        viewer.camera = updated; viewer.reconnect();
+        viewer.camera = updated; if (viewer.recorder) viewer.recorder.camera = updated; viewer.reconnect();
         return json(res,200,{ok:true});
       }
       return json(res,405,{error:'Metode tidak didukung.'});

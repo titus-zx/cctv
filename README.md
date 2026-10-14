@@ -48,3 +48,19 @@ Pilih **Cloud V380 · luar rumah** pada pengaturan kamera untuk menggunakan devi
 Permintaan discovery relay menggunakan `http://dispa1.av380.net:8001/api/v1/get_stream_server` dan berisi device ID, platform, timestamp, serta signature. Kredensial kamera dikirim dalam format autentikasi protokol V380 ke relay yang dipilih. Video dalam mode ini melewati infrastruktur V380; tidak terbatas pada jaringan rumah.
 
 Status validasi (14 Oktober 2026): keempat kamera sudah berhasil login dan streaming melalui relay internet dari jaringan di luar rumah. Snapshot dan MJPEG masing-masing kamera sudah diverifikasi: RuangTamu, Teras1, dan Teras2 pada 1280×720; Kitchen pada 640×480. Konfigurasi saat ini memakai mode `cloud`. Pilih V380 · jaringan rumah untuk kembali memakai alamat IP lokal saat berada di rumah. Resolusi mode cloud dibaca dari gambar hasil decoder karena respons relay memiliki format berbeda dari respons LAN. Pencarian relay, fallback server, pembatalan, autentikasi, tiket sesi, dan format video juga diuji melalui 14 tes lokal.
+
+## Rekam per menit & upload ke Google Drive
+
+Tambahkan blok `recording` di `config.json` (lihat `config.example.json`). Server memotong stream setiap `segmentSeconds` (default 60) menjadi file MP4 `cam<deviceId>_YYYYMMDD_HHMMSS.mp4` di folder `recordings/` tanpa re-encode (`-c copy`, sehingga CPU hampir nol), lalu mengunggahnya ke Google Drive dan menghapus file lokal setelah berhasil (`keepLocal: true` untuk menyimpannya). Pemotongan terjadi pada keyframe berikutnya, jadi durasi bisa sedikit lebih dari 60 detik. Upload yang gagal diulang dengan backoff; file sisa dari proses sebelumnya diunggah saat server start. Kamera tertentu dapat dikecualikan dengan `"record": false`. Status (`recording.segments/uploaded/pending/error`) tampil di `/api/cameras`.
+
+Kredensial Drive memakai OAuth2 milik akun Anda sendiri: buat OAuth client (Desktop app) di Google Cloud Console dengan Drive API aktif, dapatkan `refreshToken` dengan scope `https://www.googleapis.com/auth/drive` (scope `drive.file` tidak dapat menulis ke folder yang dibuat manual), dan isi `folderId` dengan ID folder tujuan.
+
+### Tujuan: `destination`
+
+`recording.destination` memilih satu tujuan saja:
+
+- `"gdrive"` (default): unggah ke Google Drive memakai blok `drive`.
+- `"onedrive"`: salin ke folder yang disinkronkan aplikasi OneDrive, diatur di `onedrive.dir` (path absolut, misalnya `/Users/indy/Library/CloudStorage/OneDrive-Personal/cctv`). File ditulis sebagai `.part` lalu di-rename agar OneDrive tidak menyinkronkan file setengah jadi.
+- `"local"`: hanya simpan di `recordings/`.
+
+Pengaturan tujuan yang tidak dipilih boleh tetap ada di config dan diabaikan. File di `recordings/` dihapus setelah berhasil, kecuali `keepLocal: true`.

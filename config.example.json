@@ -1,5 +1,19 @@
 {
   "port": 3380,
+  "recording": {
+    "enabled": true,
+    "segmentSeconds": 60,
+    "dir": "recordings",
+    "keepLocal": false,
+    "destination": "onedrive",
+    "onedrive": {"dir": "/Users/indy/Library/CloudStorage/OneDrive-Personal/cctv"},
+    "drive": {
+      "clientId": "xxx.apps.googleusercontent.com",
+      "clientSecret": "GANTI",
+      "refreshToken": "GANTI",
+      "folderId": "ID_FOLDER_DRIVE"
+    }
+  },
   "cameras": [{
     "name": "Kamera utama",
     "ip": "192.168.18.6",
