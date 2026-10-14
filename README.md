@@ -49,21 +49,24 @@ Permintaan discovery relay menggunakan `http://dispa1.av380.net:8001/api/v1/get_
 
 Status validasi (14 Oktober 2026): keempat kamera sudah berhasil login dan streaming melalui relay internet dari jaringan di luar rumah. Snapshot dan MJPEG masing-masing kamera sudah diverifikasi: RuangTamu, Teras1, dan Teras2 pada 1280×720; Kitchen pada 640×480. Konfigurasi saat ini memakai mode `cloud`. Pilih V380 · jaringan rumah untuk kembali memakai alamat IP lokal saat berada di rumah. Resolusi mode cloud dibaca dari gambar hasil decoder karena respons relay memiliki format berbeda dari respons LAN. Pencarian relay, fallback server, pembatalan, autentikasi, tiket sesi, dan format video juga diuji melalui 14 tes lokal.
 
-## Rekam per menit & upload ke Google Drive
+## Rekam per menit, upload, dan playback (rclone)
 
-Tambahkan blok `recording` di `config.json` (lihat `config.example.json`). Server memotong stream setiap `segmentSeconds` (default 60) menjadi file MP4 `cam<deviceId>_YYYYMMDD_HHMMSS.mp4` di folder `recordings/` tanpa re-encode (`-c copy`, sehingga CPU hampir nol), lalu mengunggahnya ke Google Drive dan menghapus file lokal setelah berhasil (`keepLocal: true` untuk menyimpannya). Pemotongan terjadi pada keyframe berikutnya, jadi durasi bisa sedikit lebih dari 60 detik. Upload yang gagal diulang dengan backoff; file sisa dari proses sebelumnya diunggah saat server start. Kamera tertentu dapat dikecualikan dengan `"record": false`. Status (`recording.segments/uploaded/pending/error`) tampil di `/api/cameras`.
-
-Kredensial Drive memakai OAuth2 milik akun Anda sendiri: buat OAuth client (Desktop app) di Google Cloud Console dengan Drive API aktif, dapatkan `refreshToken` dengan scope `https://www.googleapis.com/auth/drive` (scope `drive.file` tidak dapat menulis ke folder yang dibuat manual), dan isi `folderId` dengan ID folder tujuan.
+Tambahkan blok `recording` di `config.json` (lihat `config.example.json`). Server memotong stream setiap `segmentSeconds` (default 60) menjadi file MP4 `cam<deviceId>_YYYYMMDD_HHMMSS.mp4` di folder `recordings/` tanpa re-encode (`-c copy`, CPU hampir nol), mengunggahnya dengan **rclone**, lalu menghapus file lokal setelah berhasil (`keepLocal: true` untuk menyimpannya). Pemotongan terjadi pada keyframe berikutnya, jadi durasi bisa sedikit lebih dari 60 detik. Upload yang gagal diulang dengan backoff; file sisa dari proses sebelumnya diunggah saat server start. Kamera tertentu dapat dikecualikan dengan `"record": false`. Status (`recording.segments/uploaded/pending/error`) tampil di `/api/cameras`.
 
 ### Tujuan: `destination`
 
-`recording.destination` memilih satu tujuan saja:
+```json
+"recording": {"enabled": true, "segmentSeconds": 60, "destination": "gdrive",
+  "rclone": {"gdrive": "gdrive:cctv", "onedrive": "onedrive:cctv"}}
+```
 
-- `"gdrive"` (default): unggah ke Google Drive memakai blok `drive`.
-- `"onedrive"`: salin ke folder yang disinkronkan aplikasi OneDrive, diatur di `onedrive.dir` (path absolut, misalnya `/Users/indy/Library/CloudStorage/OneDrive-Personal/cctv`). File ditulis sebagai `.part` lalu di-rename agar OneDrive tidak menyinkronkan file setengah jadi.
+- `"gdrive"` / `"onedrive"`: memakai remote rclone yang tertulis di `rclone.gdrive` / `rclone.onedrive` (format `remote:folder`). Hanya yang dipilih yang dipakai. Isi bebas, termasuk path folder lokal, mis. folder OneDrive yang disinkronkan aplikasinya.
 - `"local"`: hanya simpan di `recordings/`.
+- `rclone.bin` (atau env `RCLONE_PATH`) mengatur lokasi biner bila tidak ada di PATH.
 
-Pengaturan tujuan yang tidak dipilih boleh tetap ada di config dan diabaikan. File di `recordings/` dihapus setelah berhasil, kecuali `keepLocal: true`.
+Pasang dan siapkan rclone sekali: `brew install rclone`, lalu `rclone config` untuk membuat remote (`gdrive` bertipe Google Drive, `onedrive` bertipe Microsoft OneDrive). Autentikasi dan token dikelola rclone, bukan aplikasi ini. Cek dengan `rclone lsd gdrive:`.
+
+Playback (menu **Rekaman** di sidebar) membaca dari tujuan yang sama: daftar lewat `rclone lsjson`, video lewat `rclone cat --offset/--count` sehingga seek (HTTP Range) tetap bekerja tanpa mengunduh seluruh file. Pilih kamera, tanggal, dan rentang jam; daftar diurutkan terbaru dulu dengan paging 50 rekaman. Segmen berikutnya (lebih baru) diputar otomatis. API: `GET /api/recordings?camera=<id|all>&date=YYYY-MM-DD&from=HH:MM&to=HH:MM&page=1&size=50` dan `GET /recordings/<cam…_YYYYMMDD_HHMMSS.mp4>`. Kamera MJPEG (mis. Kitchen) direkam sebagai H.264 agar dapat diputar di browser.
 
 ### Audio
 
@@ -75,6 +78,89 @@ Rekaman menyertakan audio bila kamera mengirimnya (G.711 A-law 8 kHz mono, didek
 - **Suara live:** tombol 🔇/🔊 pada kartu kamera yang mengirim audio.
 - **Push to talk (eksperimental, belum terverifikasi):** tahan tombol 🎤 untuk mengirim suara mikrofon ke kamera (G.711 A-law 8 kHz, paket 60 ms ke `POST /api/cameras/<id>/talk`). Protokol talkback V380 tidak terdokumentasi; formatnya meniru frame audio yang dikirim kamera dan belum dikonfirmasi pada hardware. Bila kamera tidak bersuara, format paket di `V380Client.talk` perlu disesuaikan dengan tangkapan trafik app V380.
 
-### Playback rekaman
+## Docker
 
-Menu **Rekaman** di sidebar memutar ulang rekaman dari tempat rekaman itu ditulis, sesuai `recording.destination`: folder OneDrive (`onedrive.dir`), `recordings/` (`local`), atau folder Google Drive (`drive`, daftar dan unduhan lewat Drive API). Pilih kamera dan tanggal, klik segmen untuk memutar; segmen berikutnya otomatis diputar. Seek didukung lewat HTTP Range. API: `GET /api/recordings?camera=<id|all>&date=YYYY-MM-DD` dan `GET /recordings/<cam…_YYYYMMDD_HHMMSS.mp4>`. File `.part` (sedang disalin) tidak tampil. Kamera MJPEG (mis. Kitchen) kini direkam sebagai H.264 agar dapat diputar di browser; rekaman MJPEG lama tidak dapat diputar di browser.
+Image menyertakan Node.js 22, FFmpeg (termasuk libx264), rclone, Python untuk discovery, dan zona waktu Asia/Jakarta. Jalankan Docker Desktop dahulu, kemudian dari folder proyek:
+
+```sh
+npm run docker:up
+```
+
+Buka **http://localhost:3381**. Perintah ini menyiapkan data Docker pada pemakaian pertama dan menjalankan Compose dengan port yang terpisah dari `npm start` di 3380.
+
+Konfigurasi Docker disalin sekali dari `config.json` ke `docker-data/config/config.json`. Ubah salinan ini untuk mengatur kamera atau recording di Docker; menjalankan ulang tidak menimpa perubahan. Nilai `recording.enabled` mengikuti konfigurasi sumber, termasuk jika recording sedang dinonaktifkan. Folder konfigurasi dipasang sebagai volume direktori agar penyimpanan pengaturan melalui UI (atomic rename) tetap bekerja.
+
+Data persisten:
+
+- `docker-data/config/`: konfigurasi kamera khusus Docker.
+- `docker-data/recordings/`: rekaman dan antrean upload Docker.
+- `docker-data/rclone/`: konfigurasi/token rclone Docker; helper menyalin konfigurasi rclone host jika sudah tersedia.
+- `docker-data/storage.compose.json`: mount tambahan untuk folder sinkronisasi lokal, misalnya OneDrive. Helper memetakan path host ke path container tanpa mengubah konfigurasi host. Folder tersebut harus tetap tersedia di mesin yang menjalankan Docker.
+
+`docker-data/`, konfigurasi rahasia, dan rekaman tidak masuk Git atau image Docker. UID/GID container mengikuti pengguna yang menjalankan helper agar volume dapat ditulis. Rclone memakai konfigurasi yang writable agar refresh token tetap tersimpan. Jika remote rclone belum dibuat:
+
+```sh
+node tools/docker.js run --rm viewer rclone config
+```
+
+Untuk port lain, ubah `VIEWER_PORT` di `docker-data/compose.env`. Menjalankan Docker di komputer lain memerlukan konfigurasi kamera, remote rclone, dan folder storage yang sesuai untuk komputer itu. Cloud V380 memakai koneksi keluar dari container; mode LAN memerlukan jaringan Docker yang dapat menjangkau IP kamera. Discovery UDP broadcast dari Docker Desktop dapat tidak menyeberang ke LAN; jalankan `tools/discover.py` pada host bila perlu.
+
+```sh
+npm run docker:logs
+node tools/docker.js ps
+node tools/docker.js exec viewer npm test
+npm run docker:down
+```
+
+`docker:down` menghentikan container dan mempertahankan data pada folder host. Untuk membangun ulang setelah perubahan kode, jalankan `npm run docker:up` lagi. Pengaturan server `HOST`, `PORT`, `PUBLIC_PORT`, dan `CONFIG_PATH` dipakai oleh Compose; `npm start` tanpa variabel ini tetap memakai konfigurasi dan alamat localhost semula.
+
+### Google Drive dengan rclone di Docker
+
+Compose tersedia di `compose.yaml`. Persiapkan volume sekali dengan `node tools/docker.js setup`, kemudian jalankan `npm run docker:up`. Helper juga memasukkan `docker-data/compose.env` (UID/GID dan port) serta `docker-data/storage.compose.json` (mount storage tambahan). Bentuk perintah Compose langsung yang setara:
+
+```sh
+docker compose --env-file docker-data/compose.env \
+  -f compose.yaml -f docker-data/storage.compose.json up -d --build
+```
+
+Cara paling mudah menghubungkan Google Drive adalah melakukan OAuth di Mac, dengan file konfigurasi yang langsung digunakan container:
+
+```sh
+rclone --config ./docker-data/rclone/rclone.conf config
+```
+
+Pilih `n` (remote baru), beri nama `gdrive`, dan pilih storage `drive` (Google Drive). Gunakan OAuth client ID dan client secret milik sendiri: buat sesuai [panduan rclone](https://rclone.org/drive/#making-your-own-client-id), aktifkan Google Drive API, dan pilih tipe aplikasi Desktop. Dokumentasi rclone saat ini merekomendasikan client ID sendiri karena client bersama akan dihentikan selama 2026.
+
+Untuk scope, pilih `drive.file` (biasanya pilihan 3): rclone dapat upload dan playback file/folder yang dibuatnya. Jika perlu mengakses folder/file yang sebelumnya dibuat di luar rclone, pilih scope `drive` (biasanya pilihan 1). Kosongkan service-account file; pilih tidak untuk advanced config, ya untuk autentikasi browser, dan tidak untuk Shared Drive bila memakai My Drive pribadi. Login ke akun Google tujuan dan simpan remote. Masukkan client secret serta token hanya ke prompt rclone, bukan ke `config.json` kamera.
+
+Verifikasi dari container dan buat folder tujuan:
+
+```sh
+node tools/docker.js exec viewer rclone listremotes
+node tools/docker.js exec viewer rclone mkdir gdrive:v380-recordings
+node tools/docker.js exec viewer rclone lsf gdrive:v380-recordings
+```
+
+Edit **hanya blok `recording`** di `docker-data/config/config.json` seperti di bawah. Pertahankan array `cameras` yang sudah berisi kredensial kamera Anda. `config.gdrive.example.json` adalah contoh lengkap dengan placeholder, bukan pengganti konfigurasi kamera yang sudah berjalan.
+
+```json
+"recording": {
+  "enabled": true,
+  "segmentSeconds": 60,
+  "dir": "/app/recordings",
+  "keepLocal": false,
+  "destination": "gdrive",
+  "rclone": {"gdrive": "gdrive:v380-recordings"}
+}
+```
+
+Kemudian restart agar pengaturan recording dimuat:
+
+```sh
+node tools/docker.js restart viewer
+npm run docker:logs
+```
+
+Rekaman diunggah setelah tiap segmen selesai; status antrean ada di `/api/cameras`. Token tersimpan persisten di `docker-data/rclone/rclone.conf` dan rclone memperbaruinya otomatis. `keepLocal: false` menghapus segmen lokal setelah upload berhasil. Selama gagal upload, segmen tetap di disk dan dicoba lagi.
+
+Bila melakukan config dari container tanpa browser, jawab tidak pada autentikasi otomatis lalu ikuti [remote setup rclone](https://rclone.org/remote_setup/). Jalankan `rclone authorize` pada komputer dengan browser memakai client OAuth yang sama, dan masukkan hasilnya ke prompt container. Config pada host dengan path volume di atas menghindari langkah manual ini.

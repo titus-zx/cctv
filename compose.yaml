@@ -1,0 +1,41 @@
+name: v380-viewer
+services:
+  viewer:
+    build: .
+    image: v380-viewer:local
+    init: true
+    restart: unless-stopped
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3380"
+      PUBLIC_PORT: "${VIEWER_PORT:-3381}"
+      TZ: Asia/Jakarta
+      CONFIG_PATH: /app/runtime/config.json
+      RCLONE_CONFIG: /app/rclone/rclone.conf
+      HOME: /tmp
+    ports:
+      - "127.0.0.1:${VIEWER_PORT:-3381}:3380"
+    volumes:
+      - type: bind
+        source: ./docker-data/config
+        target: /app/runtime
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./docker-data/recordings
+        target: /app/recordings
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./docker-data/rclone
+        target: /app/rclone
+        bind:
+          create_host_path: false
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3380/api/cameras').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

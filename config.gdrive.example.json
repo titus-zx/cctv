@@ -1,0 +1,25 @@
+{
+  "port": 3380,
+  "recording": {
+    "enabled": true,
+    "segmentSeconds": 60,
+    "dir": "/app/recordings",
+    "keepLocal": false,
+    "destination": "gdrive",
+    "rclone": {
+      "gdrive": "gdrive:v380-recordings"
+    }
+  },
+  "cameras": [
+    {
+      "name": "Kamera utama",
+      "ip": "192.168.18.6",
+      "deviceId": "65986431",
+      "username": "admin",
+      "password": "GANTI_PASSWORD",
+      "v380Port": 8800,
+      "mode": "cloud",
+      "quality": "hd"
+    }
+  ]
+}

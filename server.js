@@ -6,12 +6,14 @@ const net = require('node:net');
 const { Viewer } = require('./lib/viewer');
 const { createRecording } = require('./lib/recorder');
 const { createStore, NAME } = require('./lib/playback');
-const configPath = path.join(__dirname, 'config.json');
+const configPath = path.resolve(process.env.CONFIG_PATH || path.join(__dirname, 'config.json'));
 const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const recording = createRecording(cfg, __dirname);
 const store = createStore(cfg, __dirname);
 const viewers = cfg.cameras.map(camera => new Viewer(camera, recording?.make(camera)));
 const port = Number(process.env.PORT || cfg.port || 3380);
+const publicPort = Number(process.env.PUBLIC_PORT || port);
+const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `localhost:${publicPort}`, `127.0.0.1:${publicPort}`]);
 const json = (res, code, data) => {res.writeHead(code, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 async function body(req) {
   let text = '';
@@ -26,8 +28,8 @@ function saveConfig() {
 const server = http.createServer(async (req, res) => {
   try {
     const host = req.headers.host || '';
-    if (![`localhost:${port}`,`127.0.0.1:${port}`].includes(host)) return json(res, 403, {error:'Akses hanya melalui localhost.'});
-    if (req.method === 'POST' && req.headers.origin && ![`http://localhost:${port}`,`http://127.0.0.1:${port}`].includes(req.headers.origin))
+    if (!allowedHosts.has(host)) return json(res, 403, {error:'Akses hanya melalui localhost.'});
+    if (req.method === 'POST' && req.headers.origin && ![...allowedHosts].some(host => req.headers.origin === `http://${host}`))
       return json(res, 403, {error:'Origin tidak diizinkan.'});
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')
@@ -118,6 +120,6 @@ const server = http.createServer(async (req, res) => {
   } catch (error) { if (!res.headersSent) json(res,400,{error:error.message}); else res.end(); }
 });
 server.on('error', error => {console.error(`Server gagal: ${error.code || 'error'}`);for(const viewer of viewers)viewer.stop();process.exitCode=1;});
-server.listen(port,'127.0.0.1',() => {console.log(`V380 Viewer: http://localhost:${port}`);for(const viewer of viewers)viewer.start();});
+server.listen(port,process.env.HOST || '127.0.0.1',() => {console.log(`V380 Viewer: http://localhost:${publicPort}`);for(const viewer of viewers)viewer.start();});
 function shutdown() {for(const viewer of viewers)viewer.stop();server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref();}
 process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

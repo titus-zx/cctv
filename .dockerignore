@@ -1,0 +1,12 @@
+*
+!Dockerfile
+!package.json
+!server.js
+!lib/
+!lib/**
+!public/
+!public/**
+!test/
+!test/**
+!tools/
+!tools/discover.py
