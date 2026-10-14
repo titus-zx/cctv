@@ -30,7 +30,7 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')
       return json(res, 200, viewers.map((viewer,id) => ({id,...viewer.status()})));
-    const match = url.pathname.match(/^\/(stream|audio|snapshot|api\/cameras)\/(\d+)(?:\/(reconnect))?$/);
+    const match = url.pathname.match(/^\/(stream|audio|snapshot|api\/cameras)\/(\d+)(?:\/(reconnect|ptz))?$/);
     if (match) {
       const id = Number(match[2]), viewer = viewers[id];
       if (!viewer) return json(res,404,{error:'Kamera tidak ditemukan.'});
@@ -45,6 +45,11 @@ const server = http.createServer(async (req, res) => {
       if (match[1] === 'api/cameras' && req.method === 'POST') {
         if (req.headers['content-type']?.split(';')[0] !== 'application/json') return json(res,415,{error:'Gunakan application/json.'});
         if (match[3] === 'reconnect') { viewer.reconnect(); return json(res,200,{ok:true}); }
+        if (match[3] === 'ptz') {
+          const input = await body(req);
+          if (!['up','down','left','right','stop'].includes(input.direction)) throw new Error('Arah tidak valid.');
+          viewer.ptz(input.direction); return json(res,200,{ok:true});
+        }
         const input = await body(req);
         if (typeof input.ip !== 'string' || (input.ip !== '' && !net.isIP(input.ip)) || (input.mode !== 'cloud' && !input.ip)) throw new Error('Alamat IP tidak valid.');
         if (!/^\d{1,10}$/.test(String(input.deviceId)) || Number(input.deviceId) < 1 || Number(input.deviceId) > 0xffffffff) throw new Error('Device ID tidak valid.');

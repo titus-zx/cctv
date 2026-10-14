@@ -70,6 +70,16 @@ function createCard(camera) {
     const wasPlaying = sound.id === camera.id; stopSound();
     if (!wasPlaying) playSound(camera.id, event.currentTarget).catch(error => toast(error.message));
   };
+  // Hold a button to move; the camera keeps moving until told to stop, so repeat while held and always send stop on release.
+  const ptz = card.querySelector('.ptz'); let ptzTimer;
+  const send = direction => api(`/api/cameras/${camera.id}/ptz`, {direction}).catch(error => { clearInterval(ptzTimer); toast(error.message); });
+  const release = () => { if (ptzTimer) { clearInterval(ptzTimer); ptzTimer = null; send('stop'); } };
+  for (const button of ptz.querySelectorAll('button')) {
+    button.onpointerdown = event => { event.preventDefault(); button.setPointerCapture(event.pointerId); send(button.dataset.dir); ptzTimer = setInterval(() => send(button.dataset.dir), 700); };
+    button.onpointerup = button.onpointercancel = release;
+    button.onkeydown = event => { if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) { event.preventDefault(); send(button.dataset.dir); } };
+    button.onkeyup = event => { if (event.key === 'Enter' || event.key === ' ') send('stop'); };
+  }
   const img = card.querySelector('.video');
   img.onerror = () => img.removeAttribute('src');
   card.querySelector('.fullscreen').onclick = async () => {
@@ -110,6 +120,7 @@ function render(camera) {
   card.querySelector('.live-badge').hidden = !live;
   card.querySelector('.video-quality').hidden = !live;
   card.querySelector('.video-quality').textContent = camera.quality.toUpperCase();
+  card.querySelector('.ptz').hidden = !live;
   card.querySelector('.sound').hidden = !(live && camera.audio);
   card.querySelector('.fullscreen').disabled = !live;
   card.querySelector('.snapshot').setAttribute('aria-disabled',String(!live));

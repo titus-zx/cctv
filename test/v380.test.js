@@ -146,3 +146,13 @@ test('stopping a cloud connection aborts relay lookup before authentication', as
   const task=client.start();await ready;client.stop();await task;
   assert.equal(failure,undefined);assert.equal(client.sockets.size,0);
 });
+test('ptz sends command 170 with idle 1000 and direction codes, and rejects bad input', () => {
+  const {V380Client} = require('../lib/v380');
+  const client = new V380Client({deviceId: '1', password: 'x'}); const sent = [];
+  client.control = {destroyed: false, write: b => sent.push(b)};
+  client.ptz('right'); client.ptz('up'); client.ptz('stop');
+  assert.deepEqual(sent.map(b => [b.length, b.readUInt32LE(0), b.readUInt16LE(8), b.readUInt16LE(10)]),
+    [[256,170,1002,1000],[256,170,1000,1003],[256,170,1000,1000]]);
+  assert.throws(() => client.ptz('diagonal'), /Arah/);
+  client.control = null; assert.throws(() => client.ptz('left'), /belum terhubung/);
+});
