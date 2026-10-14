@@ -17,7 +17,7 @@ services:
       RECORDING_RETENTION_DAYS: "${RECORDING_RETENTION_DAYS:-}"
       RECORDING_RETENTION_CHECK_SECONDS: "${RECORDING_RETENTION_CHECK_SECONDS:-}"
     ports:
-      - "127.0.0.1:${VIEWER_PORT:-3381}:3380"
+      - "0.0.0.0:${VIEWER_PORT:-3381}:3380"
     volumes:
       - type: bind
         source: ./docker-data/config

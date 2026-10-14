@@ -16,7 +16,6 @@ const store = createStore(cfg, __dirname);
 const viewers = cfg.cameras.map(camera => new Viewer(camera, recording?.make(camera)));
 const port = Number(process.env.PORT || cfg.port || 3380);
 const publicPort = Number(process.env.PUBLIC_PORT || port);
-const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `localhost:${publicPort}`, `127.0.0.1:${publicPort}`]);
 const json = (res, code, data) => {res.writeHead(code, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 async function body(req) {
   let text = '';
@@ -31,8 +30,7 @@ function saveConfig() {
 const server = http.createServer(async (req, res) => {
   try {
     const host = req.headers.host || '';
-    if (!allowedHosts.has(host)) return json(res, 403, {error:'Akses hanya melalui localhost.'});
-    if (req.method === 'POST' && req.headers.origin && ![...allowedHosts].some(host => req.headers.origin === `http://${host}`))
+    if (req.method === 'POST' && req.headers.origin && !['http:', 'https:'].some(protocol => req.headers.origin === `${protocol}//${host}`))
       return json(res, 403, {error:'Origin tidak diizinkan.'});
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')

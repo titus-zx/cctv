@@ -86,7 +86,7 @@ Image menyertakan Node.js 22, FFmpeg (termasuk libx264), rclone, Python untuk di
 npm run docker:up
 ```
 
-Buka **http://localhost:3381**. Perintah ini menyiapkan data Docker pada pemakaian pertama dan menjalankan Compose dengan port yang terpisah dari `npm start` di 3380.
+Buka **http://localhost:3381** pada host atau **http://<IP-host>:3381** dari perangkat lain. Port Docker menerima koneksi pada semua alamat IPv4 host (`0.0.0.0`). Perintah ini menyiapkan data Docker pada pemakaian pertama dan menjalankan Compose dengan port yang terpisah dari `npm start` di 3380.
 
 Konfigurasi Docker disalin sekali dari `config.json` ke `docker-data/config/config.json`. Ubah salinan ini untuk mengatur kamera atau recording di Docker; menjalankan ulang tidak menimpa perubahan. Nilai `recording.enabled` mengikuti konfigurasi sumber, termasuk jika recording sedang dinonaktifkan. Folder konfigurasi dipasang sebagai volume direktori agar penyimpanan pengaturan melalui UI (atomic rename) tetap bekerja.
 
