@@ -69,10 +69,11 @@ const server = http.createServer(async (req, res) => {
       if (match[1] === 'stream' && req.method === 'GET') return viewer.subscribe(res);
       if (match[1] === 'audio' && req.method === 'GET') return viewer.subscribeAudio(res);
       if (match[1] === 'snapshot' && req.method === 'GET') {
-        if (!viewer.lastJpeg || viewer.state !== 'live') return json(res,503,{error:'Gambar kamera belum tersedia.'});
+        let jpeg;
+        try { jpeg = await viewer.snapshot(); } catch (error) { return json(res,503,{error:error.message}); }
         res.writeHead(200, {'Content-Type':'image/jpeg','Cache-Control':'no-store',
           'Content-Disposition':`attachment; filename="v380-${viewer.camera.deviceId}-${Date.now()}.jpg"`});
-        return res.end(viewer.lastJpeg);
+        return res.end(jpeg);
       }
       if (match[1] === 'api/cameras' && req.method === 'POST') {
         if (match[3] === 'talk') { // raw G.711 A-law, 8 kHz mono, at most 480 bytes per request

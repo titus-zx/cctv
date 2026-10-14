@@ -92,3 +92,29 @@ test('recorder queues only finalized, decodable MP4 and stop waits for its trail
   assert.equal(fs.readdirSync(dir).some(name=>name.startsWith('.partial-')),false);
   fs.rmSync(dir,{recursive:true,force:true});
 });
+
+test('buffer overflow closes the segment and reports frame loss instead of feeding corrupted video',async()=>{
+  const {EventEmitter}=require('node:events');
+  const rec=new Recorder({deviceId:'127'},{dir:os.tmpdir(),queue:{add(){}}});
+  const proc=new EventEmitter();let ended=false,wrote=false;
+  Object.assign(proc,{stdin:{writableLength:8*1024*1024,destroyed:false,write(){wrote=true;},end(){ended=true;setImmediate(()=>proc.emit('close',0));}},stdio:[],kill(){}});
+  rec.process=proc;
+  assert.equal(rec.write(Buffer.from('frame')),false);
+  assert.equal(wrote,false);assert.equal(ended,true);assert.equal(rec.process,null);
+  assert.equal(rec.droppedFrames,1);assert.equal(rec.restarts,1);assert.match(rec.lastError,/Buffer/);
+  await new Promise(r=>setImmediate(r));
+});
+
+test('paced MJPEG preserves elapsed time and does not synthesize 25 fps',{skip:spawnSync('ffmpeg',['-version']).error?'ffmpeg tidak ada':false},async()=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'paced-mjpeg-'));
+  const frame=spawnSync('ffmpeg',['-v','error','-f','lavfi','-i','color=size=160x120:rate=5','-frames:v','1','-threads','1','-c:v','mjpeg','-f','mjpeg','pipe:1']).stdout;
+  const seen=[];const rec=new Recorder({deviceId:'128',recordingEncoder:'cpu'},{dir,queue:{add:f=>seen.push(f)}});
+  try {
+    rec.start('mjpeg',{fps:5});
+    for(let i=0;i<12;i++){rec.write(frame);await new Promise(r=>setTimeout(r,200));}
+    await rec.stop();assert.equal(seen.length,1);
+    const probe=JSON.parse(spawnSync('ffprobe',['-v','error','-show_entries','format=duration:stream=nb_frames','-of','json',seen[0]]).stdout);
+    assert.ok(Number(probe.format.duration)>=1.8 && Number(probe.format.duration)<=3.2,JSON.stringify(probe));
+    assert.ok(Number(probe.streams[0].nb_frames)<=14,JSON.stringify(probe));
+  } finally {await rec.stop();fs.rmSync(dir,{recursive:true,force:true});}
+});

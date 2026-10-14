@@ -15,7 +15,7 @@ npm start
 
 Buka **http://localhost:3380**. Untuk mode LAN, Mac dan kamera harus berada di jaringan yang saling terhubung. Server hanya mendengarkan di 127.0.0.1; alamat lokal ini juga digunakan saat kamera diakses melalui relay cloud. Gunakan `PORT=3381 npm start` jika port utama terpakai. Untuk lokasi FFmpeg lain, gunakan `FFMPEG_PATH=/path/to/ffmpeg npm start`.
 
-Fitur: video live 10 fps, status koneksi, snapshot JPEG, layar penuh, pengaturan kamera, kualitas HD/SD, reconnect otomatis untuk gangguan jaringan, dan dukungan RTSP/bridge. Password didukung hingga 47 byte. Password yang kosong pada formulir mempertahankan nilai tersimpan; password tidak dikembalikan melalui API. Login yang ditolak menunggu pengaturan diperbaiki atau reconnect manual, agar tidak mencoba password berulang kali.
+Fitur: preview video hingga 5 fps secara default, status koneksi, snapshot JPEG, layar penuh, pengaturan kamera, kualitas HD/SD, reconnect otomatis untuk gangguan jaringan, dan dukungan RTSP/bridge. Password didukung hingga 47 byte. Password yang kosong pada formulir mempertahankan nilai tersimpan; password tidak dikembalikan melalui API. Login yang ditolak menunggu pengaturan diperbaiki atau reconnect manual, agar tidak mencoba password berulang kali.
 
 Kamera tambahan dapat dimasukkan ke array `cameras` di `config.json`, lalu restart server. File ini berisi kredensial lokal dan diabaikan Git. Untuk mode RTSP, isi `mode: "rtsp"` serta `rtspUrl` yang lengkap. Encode karakter khusus dalam username/password URL, misalnya `#` menjadi `%23`.
 
@@ -51,7 +51,7 @@ Status validasi (14 Oktober 2026): keempat kamera sudah berhasil login dan strea
 
 ## Rekam per menit, upload, dan playback (rclone)
 
-Tambahkan blok `recording` di `config.json` (lihat `config.example.json`). Server memotong stream setiap `segmentSeconds` (default 60) menjadi file MP4 `cam<deviceId>_YYYYMMDD_HHMMSS.mp4` di folder `recordings/` tanpa re-encode (`-c copy`, CPU hampir nol), mengunggahnya dengan **rclone**, lalu menghapus file lokal setelah berhasil (`keepLocal: true` untuk menyimpannya). Pemotongan terjadi pada keyframe berikutnya, jadi durasi bisa sedikit lebih dari 60 detik. Upload yang gagal diulang dengan backoff; file sisa dari proses sebelumnya diunggah saat server start. Kamera tertentu dapat dikecualikan dengan `"record": false`. Status (`recording.segments/uploaded/pending/error`) tampil di `/api/cameras`.
+Tambahkan blok `recording` di `config.json` (lihat `config.example.json`). Server memotong stream setiap `segmentSeconds` (default 60) menjadi file MP4 `cam<deviceId>_YYYYMMDD_HHMMSS.mp4` di folder `recordings/` tanpa re-encode (`-c:v copy` untuk H.264/HEVC, tanpa encoding video ulang), mengunggahnya dengan **rclone**, lalu menghapus file lokal setelah berhasil (`keepLocal: true` untuk menyimpannya). Pemotongan terjadi pada keyframe berikutnya, jadi durasi bisa sedikit lebih dari 60 detik. Upload yang gagal diulang dengan backoff; file sisa dari proses sebelumnya diunggah saat server start. Kamera tertentu dapat dikecualikan dengan `"record": false`. Status (`recording.segments/uploaded/pending/error`) tampil di `/api/cameras`.
 
 ### Tujuan: `destination`
 
@@ -225,3 +225,16 @@ RECORDING_RETENTION_CHECK_SECONDS=3600
 Lalu jalankan `npm run docker:up` untuk memuat environment baru. Jika hanya mengubah `docker-data/config/config.json`, gunakan `node tools/docker.js restart viewer`. Cleanup pertama berjalan saat startup, lalu setiap interval (default satu jam). Perubahan nilai dapat mulai menghapus rekaman lama pada startup berikutnya.
 
 Hanya file MP4 di folder tujuan utama dengan device ID kamera yang terdaftar dan timestamp valid yang diproses. File lebih tua dari batas umur dihapus satu per satu melalui `rclone deletefile`; aplikasi tidak memanggil purge atau membersihkan trash Google Drive. Folder lain, file nonrekaman, salinan recovery, symlink lokal, MP4 yang belum lengkap, dan upload yang masih antre tetap dipertahankan. Salinan lokal tujuan cloud yang belum ditemukan di cloud juga dipertahankan agar rekaman belum terunggah tidak hilang. Periksa hasil, jumlah file yang dihapus, dan error melalui **GET `/api/retention`**.
+
+
+### Rekaman pada mesin dengan CPU terbatas
+
+Rekaman H.264/HEVC tetap memakai stream asli. Preview H.264 hanya didekode ketika ada penonton atau permintaan snapshot, dengan lebar maksimal 640 piksel dan default 5 fps. Kamera JPEG memakai frame sumber langsung sebagai preview. Preview tidak menjadi sumber watchdog kamera: kegagalan preview tidak menghentikan recorder. Decoder lama diberi batas dua detik sebelum SIGKILL, dan decoder pengganti menunggu proses lama selesai.
+
+Kamera MJPEG direkam ke H.264. Default `recordingEncoder: "auto"` menguji VA-API terlebih dahulu dan memakai CPU jika tidak tersedia atau encoder gagal saat berjalan. Docker helper membuat overlay perangkat `/dev/dri/renderD128` dan grup render hanya jika perangkat tersedia di host; image menyertakan Intel media driver. Encoder CPU memakai `ultrafast`, satu thread, dan `recordingCrf: 22`; VA-API memakai QP 22 (skalanya berbeda dari CRF). `recordingEncoder: "cpu"` menonaktifkan GPU. Hardware dan CPU mempertahankan resolusi sumber. Jangan menaikkan resolusi untuk menambah detail: sumber Kitchen saat ini 640×480.
+
+`previewFps` (default 5, batas 1–10), `recordingCrf` (CPU, 0–51), `recordingEncoder` (`auto` atau `cpu`), dan `recordingFps` dapat diisi per kamera pada konfigurasi. Untuk MJPEG, frame rate default diperkirakan dari kedatangan frame selama tiga detik pertama; timestamp menggunakan waktu kedatangan dan output VFR untuk menghindari penggandaan ke 25 fps. Ini belum menggunakan timestamp asli perangkat, sehingga jitter jaringan masih dapat memengaruhi timing.
+
+Recorder menutup segmen ketika buffer penuh dan menunggu keyframe berikutnya setelah proses lama selesai. Data yang tidak direkam dihitung sebagai `recording.droppedFrames`; restart recorder tersedia sebagai `recording.restarts`, encoder aktif sebagai `recording.encoder`. Recorder yang macet dipulihkan terpisah dari preview. Status `reconnects` dan `previewError` membantu membedakan kegagalan kamera dan preview; reconnect sumber memakai backoff 3–30 detik. Gangguan jaringan tetap dapat meninggalkan celah rekaman; pemulihan tidak merekonstruksi frame yang tidak diterima.
+
+`streamStats` melaporkan paket video/audio, frame lengkap, fragment tidak lengkap, byte diterima, dan waktu paket terakhir. `lastConnectionError` mempertahankan alasan reconnect terakhir saat koneksi baru sedang dibuka. Diagnostik tidak memuat password dan tidak otomatis mengalihkan kamera LAN ke cloud.

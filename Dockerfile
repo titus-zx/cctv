@@ -1,6 +1,6 @@
 FROM node:22-bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg rclone python3 ca-certificates tzdata \
+    && apt-get install -y --no-install-recommends ffmpeg rclone python3 ca-certificates tzdata intel-media-va-driver \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json server.js ./
