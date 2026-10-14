@@ -68,3 +68,9 @@ Pengaturan tujuan yang tidak dipilih boleh tetap ada di config dan diabaikan. Fi
 ### Audio
 
 Rekaman menyertakan audio bila kamera mengirimnya (G.711 A-law 8 kHz mono, didekripsi dengan kunci sesi yang sama, lalu di-encode AAC 32 kbps). Kamera tanpa mikrofon direkam tanpa track audio. Matikan dengan `recording.audio: false` atau `"audio": false` pada kamera tertentu. Live view di browser tetap tanpa suara.
+
+### Kontrol kamera
+
+- **PTZ:** tombol panah di pojok kanan bawah video (tahan untuk bergerak); `POST /api/cameras/<id>/ptz` dengan `{"direction":"up|down|left|right|stop"}`. Server mengirim stop otomatis bila tidak ada perintah baru selama 1,5 detik.
+- **Suara live:** tombol 🔇/🔊 pada kartu kamera yang mengirim audio.
+- **Push to talk (eksperimental, belum terverifikasi):** tahan tombol 🎤 untuk mengirim suara mikrofon ke kamera (G.711 A-law 8 kHz, paket 60 ms ke `POST /api/cameras/<id>/talk`). Protokol talkback V380 tidak terdokumentasi; formatnya meniru frame audio yang dikirim kamera dan belum dikonfirmasi pada hardware. Bila kamera tidak bersuara, format paket di `V380Client.talk` perlu disesuaikan dengan tangkapan trafik app V380.

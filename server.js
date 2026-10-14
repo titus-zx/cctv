@@ -30,7 +30,7 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')
       return json(res, 200, viewers.map((viewer,id) => ({id,...viewer.status()})));
-    const match = url.pathname.match(/^\/(stream|audio|snapshot|api\/cameras)\/(\d+)(?:\/(reconnect|ptz))?$/);
+    const match = url.pathname.match(/^\/(stream|audio|snapshot|api\/cameras)\/(\d+)(?:\/(reconnect|ptz|talk))?$/);
     if (match) {
       const id = Number(match[2]), viewer = viewers[id];
       if (!viewer) return json(res,404,{error:'Kamera tidak ditemukan.'});
@@ -43,6 +43,12 @@ const server = http.createServer(async (req, res) => {
         return res.end(viewer.lastJpeg);
       }
       if (match[1] === 'api/cameras' && req.method === 'POST') {
+        if (match[3] === 'talk') { // raw G.711 A-law, 8 kHz mono, at most 480 bytes per request
+          if (req.headers['content-type'] !== 'application/octet-stream') return json(res,415,{error:'Gunakan application/octet-stream.'});
+          const chunks = []; let size = 0;
+          for await (const chunk of req) { size += chunk.length; if (size > 480) throw new Error('Data audio terlalu besar.'); chunks.push(chunk); }
+          viewer.talk(Buffer.concat(chunks)); return json(res,200,{ok:true});
+        }
         if (req.headers['content-type']?.split(';')[0] !== 'application/json') return json(res,415,{error:'Gunakan application/json.'});
         if (match[3] === 'reconnect') { viewer.reconnect(); return json(res,200,{ok:true}); }
         if (match[3] === 'ptz') {

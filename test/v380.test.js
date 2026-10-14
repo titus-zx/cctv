@@ -156,3 +156,14 @@ test('ptz sends command 170 with idle 1000 and direction codes, and rejects bad 
   assert.throws(() => client.ptz('diagonal'), /Arah/);
   client.control = null; assert.throws(() => client.ptz('left'), /belum terhubung/);
 });
+test('talk frames mirror the camera audio layout and are AES encrypted', () => {
+  const {V380Client, mediaKey} = require('../lib/v380');
+  const client = new V380Client({deviceId: '1', password: 'x'}); const sent = [];
+  client.control = {destroyed: false, write: b => sent.push(b)}; client.key = mediaKey(12345);
+  client.talk(Buffer.alloc(100, 0x55));
+  const frame = sent[0];
+  assert.equal(frame[0], 0x7f); assert.equal(frame[1], 26); assert.equal(frame.readUInt16LE(7), 496); assert.equal(frame.length, 12 + 496);
+  const plain = decodeVideo(frame.subarray(12), client.key, 21);
+  assert.deepEqual([...plain.subarray(16, 20)], [0x55,0x55,0x55,0x55]); assert.equal(plain[16 + 100], 0xd5);
+  assert.throws(() => client.talk(Buffer.alloc(481)), /Ukuran/);
+});

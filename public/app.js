@@ -62,6 +62,42 @@ async function playSound(id, button) {
   } catch (error) { if (error.name !== 'AbortError') toast('Audio terputus.'); }
   if (sound.abort === abort) stopSound();
 }
+// Push-to-talk: microphone → 8 kHz mono → G.711 A-law → 480-byte (60 ms) POSTs while the button is held.
+function alawEncode(sample) {
+  let pcm = Math.max(-32768, Math.min(32767, Math.round(sample * 32767))), mask = 0xd5;
+  if (pcm < 0) { mask = 0x55; pcm = -pcm - 1; }
+  if (pcm > 0x7fff) pcm = 0x7fff;
+  let seg = 0; for (let v = pcm >> 8; v; v >>= 1) seg++;
+  if (seg >= 8) return 0x7f ^ mask;
+  return (((seg << 4) | (seg < 2 ? (pcm >> 4) & 0x0f : (pcm >> (seg + 3)) & 0x0f))) ^ mask;
+}
+const talk = {stream:null, context:null, node:null, source:null};
+async function startTalk(id) {
+  talk.stream ||= await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,channelCount:1}});
+  talk.context ||= new AudioContext();
+  await talk.context.resume();
+  const ratio = talk.context.sampleRate / 8000; let position = 0, pending = [];
+  talk.source = talk.context.createMediaStreamSource(talk.stream);
+  talk.node = talk.context.createScriptProcessor(2048, 1, 1);
+  talk.node.onaudioprocess = event => {
+    const input = event.inputBuffer.getChannelData(0);
+    for (; position < input.length; position += ratio) { // box-filter resample to 8 kHz
+      const start = Math.floor(position), end = Math.min(input.length, Math.max(start + 1, Math.floor(position + ratio)));
+      let sum = 0; for (let i = start; i < end; i++) sum += input[i];
+      pending.push(alawEncode(sum / (end - start)));
+    }
+    position -= input.length;
+    while (pending.length >= 480) {
+      const chunk = Uint8Array.from(pending.splice(0, 480));
+      fetch(`/api/cameras/${id}/talk`, {method:'POST', headers:{'Content-Type':'application/octet-stream'}, body:chunk}).catch(() => {});
+    }
+  };
+  talk.source.connect(talk.node); talk.node.connect(talk.context.destination); // node needs a sink to run; output is silent
+}
+function stopTalk() {
+  talk.node?.disconnect(); talk.source?.disconnect(); talk.node = talk.source = null;
+  for (const button of document.querySelectorAll('.talk')) button.classList.remove('active');
+}
 function createCard(camera) {
   const card = document.querySelector('#camera-template').content.firstElementChild.cloneNode(true);
   card.querySelector('.settings').onclick = () => openSettings(cameras.find(c=>c.id===camera.id));
@@ -70,6 +106,13 @@ function createCard(camera) {
     const wasPlaying = sound.id === camera.id; stopSound();
     if (!wasPlaying) playSound(camera.id, event.currentTarget).catch(error => toast(error.message));
   };
+  const talkButton = card.querySelector('.talk'); let talking = false;
+  talkButton.onpointerdown = async event => {
+    event.preventDefault(); talkButton.setPointerCapture(event.pointerId); talking = true;
+    try { await startTalk(camera.id); } catch { talking = false; return toast('Mikrofon tidak dapat diakses. Izinkan mikrofon di browser.'); }
+    if (talking) talkButton.classList.add('active'); else stopTalk();
+  };
+  talkButton.onpointerup = talkButton.onpointercancel = () => { talking = false; stopTalk(); };
   // Hold a button to move; the camera keeps moving until told to stop, so repeat while held and always send stop on release.
   const ptz = card.querySelector('.ptz'); let ptzTimer;
   const send = direction => api(`/api/cameras/${camera.id}/ptz`, {direction}).catch(error => { clearInterval(ptzTimer); toast(error.message); });
@@ -121,6 +164,7 @@ function render(camera) {
   card.querySelector('.video-quality').hidden = !live;
   card.querySelector('.video-quality').textContent = camera.quality.toUpperCase();
   card.querySelector('.ptz').hidden = !live;
+  card.querySelector('.talk').hidden = !(live && camera.audio);
   card.querySelector('.sound').hidden = !(live && camera.audio);
   card.querySelector('.fullscreen').disabled = !live;
   card.querySelector('.snapshot').setAttribute('aria-disabled',String(!live));
