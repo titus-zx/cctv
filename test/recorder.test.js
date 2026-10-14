@@ -53,3 +53,14 @@ test('destination selects exactly one uploader',()=>{
   assert.equal(createRecording({recording:{...base,destination:'gdrive'}},os.tmpdir()).queue.uploader.constructor.name,'DriveUploader');
   assert.throws(()=>createRecording({recording:{...base,destination:'x'}},os.tmpdir()),/destination/);
 });
+test('recorder muxes A-law audio from fd 3 into the segments',{skip:spawnSync('ffmpeg',['-version']).error?'ffmpeg tidak ada':false},async()=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'reca-'));
+  const gen=spawnSync('ffmpeg',['-loglevel','error','-f','lavfi','-i','testsrc=size=320x240:rate=10','-t','3','-g','10','-c:v','libx264','-f','h264','pipe:1'],{maxBuffer:1<<26});
+  const seen=[];const rec=new Recorder({deviceId:'124'},{dir,segmentSeconds:60,queue:{add:f=>seen.push(f)}});
+  rec.start('h264',{audio:true});rec.write(gen.stdout);
+  for(let i=0;i<50;i++)rec.writeAudio(Buffer.concat([Buffer.alloc(16),Buffer.alloc(480,0xd5)]));
+  rec.stop();await new Promise(r=>setTimeout(r,2500));
+  assert.equal(seen.length,1);
+  const probe=spawnSync('ffprobe',['-v','error','-show_entries','stream=codec_type','-of','csv=p=0',seen[0]]).stdout.toString();
+  assert.match(probe,/video/);assert.match(probe,/audio/);
+});

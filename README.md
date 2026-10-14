@@ -27,7 +27,7 @@ curl http://localhost:3380/api/cameras
 curl http://localhost:3380/snapshot/0 -o /tmp/snapshot.jpg
 ```
 
-Tests mencakup cuplikan terenkripsi dari kamera, fragmentasi TCP, respons kontrol panjang, password ditolak, penghentian koneksi, password yang melewati satu blok AES, dan frame JPEG. Tiga kamera telah diuji dengan device version 31, communication version 20, H.264 1280×720; kamera Kitchen memakai JPEG 640×480. Varian H.265 dan communication version 21 diimplementasikan tetapi belum diverifikasi pada hardware lain. Audio, PTZ, playback SD card, dan recording belum disediakan.
+Tests mencakup cuplikan terenkripsi dari kamera, fragmentasi TCP, respons kontrol panjang, password ditolak, penghentian koneksi, password yang melewati satu blok AES, dan frame JPEG. Tiga kamera telah diuji dengan device version 31, communication version 20, H.264 1280×720; kamera Kitchen memakai JPEG 640×480. Varian H.265 dan communication version 21 diimplementasikan tetapi belum diverifikasi pada hardware lain. PTZ dan playback SD card belum disediakan; audio hanya direkam (lihat bagian rekam), belum diputar di live view.
 
 Implementasi protokol menggunakan referensi [V380Decoder](https://github.com/PyanSofyan/V380Decoder), dengan implementasi Node.js di `lib/v380.js`. Kunci video memakai tiket login 32 bit dan konstanta media; video didekode 64 byte setiap 80 byte. Jadi kunci harus diperbarui pada tiap login.
 
@@ -64,3 +64,7 @@ Kredensial Drive memakai OAuth2 milik akun Anda sendiri: buat OAuth client (Desk
 - `"local"`: hanya simpan di `recordings/`.
 
 Pengaturan tujuan yang tidak dipilih boleh tetap ada di config dan diabaikan. File di `recordings/` dihapus setelah berhasil, kecuali `keepLocal: true`.
+
+### Audio
+
+Rekaman menyertakan audio bila kamera mengirimnya (G.711 A-law 8 kHz mono, didekripsi dengan kunci sesi yang sama, lalu di-encode AAC 32 kbps). Kamera tanpa mikrofon direkam tanpa track audio. Matikan dengan `recording.audio: false` atau `"audio": false` pada kamera tertentu. Live view di browser tetap tanpa suara.
