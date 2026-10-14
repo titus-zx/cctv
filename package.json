@@ -1,0 +1,8 @@
+{
+  "name": "v380-local-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local V380 encrypted camera viewer using Node.js and FFmpeg",
+  "scripts": {"start": "node server.js", "test": "node --test test/*.test.js"},
+  "engines": {"node": ">=18"}
+}

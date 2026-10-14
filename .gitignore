@@ -1,0 +1,11 @@
+config.json
+config.json.tmp
+*.pcap
+*.pcapng
+*.h264
+*.hevc
+*.jpg
+*.bin
+node_modules/
+__pycache__/
+.DS_Store
