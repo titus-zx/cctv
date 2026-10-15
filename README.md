@@ -225,3 +225,9 @@ RECORDING_RETENTION_CHECK_SECONDS=3600
 Lalu jalankan `npm run docker:up` untuk memuat environment baru. Jika hanya mengubah `docker-data/config/config.json`, gunakan `node tools/docker.js restart viewer`. Cleanup pertama berjalan saat startup, lalu setiap interval (default satu jam). Perubahan nilai dapat mulai menghapus rekaman lama pada startup berikutnya.
 
 Hanya file MP4 di folder tujuan utama dengan device ID kamera yang terdaftar dan timestamp valid yang diproses. File lebih tua dari batas umur dihapus satu per satu melalui `rclone deletefile`; aplikasi tidak memanggil purge atau membersihkan trash Google Drive. Folder lain, file nonrekaman, salinan recovery, symlink lokal, MP4 yang belum lengkap, dan upload yang masih antre tetap dipertahankan. Salinan lokal tujuan cloud yang belum ditemukan di cloud juga dipertahankan agar rekaman belum terunggah tidak hilang. Periksa hasil, jumlah file yang dihapus, dan error melalui **GET `/api/retention`**.
+
+## Pembaruan status kamera (SSE)
+
+Live view memakai satu koneksi `EventSource` ke `GET /api/cameras/events`, tanpa polling `/api/cameras`. Server mengirim event `cameras` segera ketika terhubung, lalu hanya saat status yang dipakai UI berubah; server memeriksa perubahan tiap satu detik. Perubahan counter frame dan timestamp video saja tidak memicu event. Heartbeat dikirim setiap 15 detik, dan browser mencoba menyambung ulang otomatis setelah koneksi terputus.
+
+Audio kamera yang dipilih dapat ikut melalui koneksi tersebut (`?audio=<id>`, event `audio` berisi G.711 A-law base64). Ini menjaga jumlah koneksi HTTP tetap rendah ketika empat video dibuka, sehingga kontrol kamera tetap memiliki koneksi yang tersedia. Endpoint JSON `/api/cameras` dan audio mentah `/audio/<id>` tetap tersedia untuk integrasi lain. Stream video memakai MJPEG seperti sebelumnya.

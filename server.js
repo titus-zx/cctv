@@ -7,6 +7,7 @@ const { Viewer } = require('./lib/viewer');
 const { createRecording } = require('./lib/recorder');
 const { createStore, NAME } = require('./lib/playback');
 const { createRetention, retentionSettings } = require('./lib/retention');
+const { CameraEvents } = require('./lib/camera-events');
 const configPath = path.resolve(process.env.CONFIG_PATH || path.join(__dirname, 'config.json'));
 const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const retentionConfig = retentionSettings(cfg.recording);
@@ -14,6 +15,8 @@ const recording = createRecording(cfg, __dirname);
 const retention = createRetention(cfg, __dirname, recording?.queue, retentionConfig);
 const store = createStore(cfg, __dirname);
 const viewers = cfg.cameras.map(camera => new Viewer(camera, recording?.make(camera)));
+const cameraSnapshot = () => viewers.map((viewer,id) => ({id,...viewer.status()}));
+const cameraEvents = new CameraEvents(cameraSnapshot);
 const port = Number(process.env.PORT || cfg.port || 3380);
 const publicPort = Number(process.env.PUBLIC_PORT || port);
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `localhost:${publicPort}`, `127.0.0.1:${publicPort}`]);
@@ -36,7 +39,12 @@ const server = http.createServer(async (req, res) => {
       return json(res, 403, {error:'Origin tidak diizinkan.'});
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')
-      return json(res, 200, viewers.map((viewer,id) => ({id,...viewer.status()})));
+      return json(res, 200, cameraSnapshot());
+    if (req.method === 'GET' && url.pathname === '/api/cameras/events') {
+      const audio = url.searchParams.get('audio');
+      if (audio !== null && (!/^\d+$/.test(audio) || !viewers[Number(audio)])) return json(res,400,{error:'Kamera audio tidak valid.'});
+      return cameraEvents.subscribe(res, audio === null ? null : viewers[Number(audio)]);
+    }
     if (req.method === 'GET' && url.pathname === '/api/retention')
       return json(res, 200, retention ? {enabled:true,...retention.status()} : {enabled:false,...retentionConfig});
     if (req.method === 'GET' && url.pathname === '/api/recordings') {
@@ -84,7 +92,7 @@ const server = http.createServer(async (req, res) => {
           viewer.talk(Buffer.concat(chunks)); return json(res,200,{ok:true});
         }
         if (req.headers['content-type']?.split(';')[0] !== 'application/json') return json(res,415,{error:'Gunakan application/json.'});
-        if (match[3] === 'reconnect') { viewer.reconnect(); return json(res,200,{ok:true}); }
+        if (match[3] === 'reconnect') { viewer.reconnect(); cameraEvents.publish(); return json(res,200,{ok:true}); }
         if (match[3] === 'ptz') {
           const input = await body(req);
           if (!['up','down','left','right','stop'].includes(input.direction)) throw new Error('Arah tidak valid.');
@@ -111,6 +119,7 @@ const server = http.createServer(async (req, res) => {
         const previous = cfg.cameras[id]; cfg.cameras[id] = updated;
         try {saveConfig();} catch (error) {cfg.cameras[id] = previous; throw error;}
         viewer.camera = updated; if (viewer.recorder) viewer.recorder.camera = updated; viewer.reconnect();
+        cameraEvents.publish();
         return json(res,200,{ok:true});
       }
       return json(res,405,{error:'Metode tidak didukung.'});
@@ -130,6 +139,7 @@ let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
+  cameraEvents.close();
   for (const viewer of viewers) viewer.stop();
   server.close();
   const deadline = setTimeout(() => process.exit(1), 12000); deadline.unref();

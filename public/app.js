@@ -3,7 +3,7 @@ const grid = document.querySelector('#grid');
 const dialog = document.querySelector('#settings');
 const form = document.querySelector('#settings-form');
 const cards = new Map();
-let cameras = [], toastTimer;
+let cameras = [], toastTimer, cameraEvents;
 function toast(message) {
   const el = document.querySelector('#toast'); el.textContent = message; el.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 4000);
@@ -24,7 +24,7 @@ function openSettings(camera) {
   dialog.showModal();
 }
 async function reconnect(id) {
-  try { await api(`/api/cameras/${id}/reconnect`,{}); await refresh(); }
+  try { await api(`/api/cameras/${id}/reconnect`,{}); }
   catch(error) {toast(error.message);}
 }
 // G.711 A-law → float samples (ITU-T G.711 reference decoding).
@@ -33,9 +33,10 @@ const alawTable = Float32Array.from({length:256}, (_, i) => {
   t = seg === 0 ? t + 8 : (t + 0x108) << Math.max(0, seg - 1);
   return ((a & 0x80) ? t : -t) / 32768;
 });
-const sound = {context:null, id:null, abort:null, next:0};
+const sound = {context:null, id:null, next:0};
 function stopSound() {
-  sound.abort?.abort(); sound.abort = null; sound.id = null;
+  sound.id = null;
+  connectCameraEvents();
   for (const button of document.querySelectorAll('.sound')) {
     button.textContent = '🔇'; button.setAttribute('aria-pressed','false'); button.title = 'Aktifkan suara';
   }
@@ -43,24 +44,19 @@ function stopSound() {
 async function playSound(id, button) {
   sound.context ||= new AudioContext({sampleRate:8000});
   await sound.context.resume();
-  const abort = sound.abort = new AbortController(); sound.id = id; sound.next = 0;
+  sound.id = id; sound.next = 0;
   button.textContent = '🔊'; button.setAttribute('aria-pressed','true'); button.title = 'Matikan suara';
-  try {
-    const response = await fetch(`/audio/${id}`, {signal:abort.signal});
-    const reader = response.body.getReader();
-    while (true) {
-      const {value, done} = await reader.read(); if (done) break;
-      const samples = Float32Array.from(value, byte => alawTable[byte]);
-      const buffer = sound.context.createBuffer(1, samples.length, 8000); buffer.copyToChannel(samples, 0);
-      const source = sound.context.createBufferSource(); source.buffer = buffer; source.connect(sound.context.destination);
-      const now = sound.context.currentTime;
-      // Keep ~150 ms of buffer; drop audio when latency grows beyond 1 s so sound stays in sync with video.
-      if (sound.next < now + 0.02) sound.next = now + 0.15;
-      if (sound.next > now + 1) continue;
-      source.start(sound.next); sound.next += buffer.duration;
-    }
-  } catch (error) { if (error.name !== 'AbortError') toast('Audio terputus.'); }
-  if (sound.abort === abort) stopSound();
+  connectCameraEvents();
+}
+function receiveSound(encoded) {
+  if (sound.id === null || !sound.context) return;
+  const samples = Float32Array.from(atob(encoded), byte => alawTable[byte.charCodeAt(0)]);
+  const buffer = sound.context.createBuffer(1, samples.length, 8000); buffer.copyToChannel(samples, 0);
+  const source = sound.context.createBufferSource(); source.buffer = buffer; source.connect(sound.context.destination);
+  const now = sound.context.currentTime;
+  if (sound.next < now + 0.02) sound.next = now + 0.15;
+  if (sound.next > now + 1) return;
+  source.start(sound.next); sound.next += buffer.duration;
 }
 // Push-to-talk: microphone → 8 kHz mono → G.711 A-law → 480-byte (60 ms) POSTs while the button is held.
 function alawEncode(sample) {
@@ -169,9 +165,8 @@ function render(camera) {
   card.querySelector('.fullscreen').disabled = !live;
   card.querySelector('.snapshot').setAttribute('aria-disabled',String(!live));
 }
-async function refresh() {
-  try {
-    cameras = await api('/api/cameras'); window.cameraList = cameras;
+function updateCameras(list) {
+    cameras = list; window.cameraList = cameras;
     cameras.forEach(render);
     document.querySelector('#total').textContent = cameras.length;
     document.querySelector('#camera-count').textContent = cameras.length;
@@ -181,16 +176,32 @@ async function refresh() {
     document.querySelector('#connection-note').textContent = cloudCount ? 'Kamera cloud terhubung melalui relay V380' : 'Video melalui jaringan rumah';
     document.querySelector('#updated').textContent = `Diperbarui ${new Date().toLocaleTimeString('id-ID')}`;
     document.querySelector('#global-error').hidden = true;
-  } catch {
-    const el = document.querySelector('#global-error');el.textContent='Server viewer tidak terjangkau. Periksa apakah npm start masih berjalan.';el.hidden=false;
-    for(const card of cards.values()){
-      card.dataset.state='error';card.querySelector('.video').hidden=true;
-      card.querySelector('.video-overlay').hidden=false;card.querySelector('.video-overlay h3').textContent='Server terputus';
-      card.querySelector('.video-overlay p').textContent='Menunggu server viewer kembali terhubung…';
-      card.querySelector('.live-badge').hidden=true;card.querySelector('.status-text').textContent='Server terputus';
-    }
-  }
 }
+function statusDisconnected() {
+  const el = document.querySelector('#global-error');
+  el.textContent='Koneksi status terputus. Menghubungkan ulang…';el.hidden=false;
+  document.querySelector('#live').textContent='—';
+  for (const card of cards.values()) {
+    card.dataset.state='error';
+    const img=card.querySelector('.video');img.hidden=true;img.removeAttribute('src');
+    card.querySelector('.video-overlay').hidden=false;
+    card.querySelector('.video-overlay h3').textContent='Server terputus';
+    card.querySelector('.video-overlay p').textContent='Menunggu koneksi kembali…';
+    card.querySelector('.live-badge').hidden=true;card.querySelector('.status-text').textContent='Server terputus';
+    card.querySelector('.ptz').hidden=true;card.querySelector('.talk').hidden=true;card.querySelector('.sound').hidden=true;
+    card.querySelector('.fullscreen').disabled=true;
+  }
+  stopTalk();sound.next=0;
+}
+function connectCameraEvents() {
+  cameraEvents?.close();
+  const source = cameraEvents = new EventSource('/api/cameras/events' + (sound.id === null ? '' : `?audio=${sound.id}`));
+  source.addEventListener('cameras', event => {if(cameraEvents===source)updateCameras(JSON.parse(event.data));});
+  source.addEventListener('audio', event => {if(cameraEvents===source)receiveSound(JSON.parse(event.data));});
+  source.onerror = () => {if(cameraEvents===source)statusDisconnected();};
+}
+window.addEventListener('pagehide',()=>{cameraEvents?.close();stopTalk();});
+window.addEventListener('pageshow',()=>{if(cameraEvents?.readyState===EventSource.CLOSED)connectCameraEvents();});
 function updateModeFields() {
   const cloud = form.elements.mode.value === 'cloud';
   document.querySelector('#rtsp-field').hidden = form.elements.mode.value !== 'rtsp';
@@ -205,7 +216,7 @@ form.onsubmit = async event => {
   const submit = form.querySelector('[type=submit]'); submit.disabled = true;
   try {
     const data = Object.fromEntries(new FormData(form));
-    await api(`/api/cameras/${data.id}`,data);dialog.close();toast('Konfigurasi disimpan. Menghubungkan kamera…');await refresh();
+    await api(`/api/cameras/${data.id}`,data);dialog.close();toast('Konfigurasi disimpan. Menghubungkan kamera…');
   } catch(error) {document.querySelector('#form-error').textContent=error.message;}
   finally {submit.disabled=false;}
 };
@@ -215,4 +226,4 @@ document.querySelector('#refresh').onclick=async event=>{
   await Promise.all(cameras.map(c=>reconnect(c.id)));button.disabled=false;
 };
 function clock(){document.querySelector('#clock').textContent=new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
-clock();setInterval(clock,1000);refresh();setInterval(refresh,2500);
+clock();setInterval(clock,1000);connectCameraEvents();
