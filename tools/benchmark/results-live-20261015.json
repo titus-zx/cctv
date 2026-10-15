@@ -1,0 +1,169 @@
+{
+  "label": "live-20261015",
+  "arch": "aarch64",
+  "cpus_per_container": 2,
+  "memory_limit_mib": 1024,
+  "preview_fps": 5,
+  "recording": false,
+  "camera_ids_tested": [
+    0,
+    1,
+    2
+  ],
+  "results": {
+    "node": {
+      "cpu_percent": 17.637708978548694,
+      "memory_mib": 130.45477430555556,
+      "fps_total": 13.343325566506378,
+      "api_p50_ms": 0.839041720610112,
+      "api_p95_ms": 1.9773340318351984,
+      "api_errors": 0
+    },
+    "rust": {
+      "cpu_percent": 15.99903538129592,
+      "memory_mib": 71.97942708333333,
+      "fps_total": 13.62727441443147,
+      "api_p50_ms": 0.7435105508193374,
+      "api_p95_ms": 4.121437552385032,
+      "api_errors": 0
+    }
+  },
+  "streaming_rounds": [
+    {
+      "node": {
+        "cpu_percent_one_core": 20.99303135778947,
+        "memory_mean_mib": 130.23541666666668,
+        "memory_peak_mib": 130.5390625,
+        "duration_seconds": 30.024482375010848,
+        "fps": [
+          5.029229084251463,
+          4.496330638238063,
+          4.096656803728013
+        ],
+        "errors": [
+          null,
+          null,
+          null
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 18.741944421785117,
+        "memory_mean_mib": 71.92395833333333,
+        "memory_peak_mib": 72.17578125,
+        "duration_seconds": 30.024227333953604,
+        "fps": [
+          4.995965369285923,
+          4.52967526815257,
+          4.163304474404935
+        ],
+        "errors": [
+          null,
+          null,
+          null
+        ]
+      }
+    },
+    {
+      "node": {
+        "cpu_percent_one_core": 17.29705656776904,
+        "memory_mean_mib": 130.54296875,
+        "memory_peak_mib": 131.03515625,
+        "duration_seconds": 30.01531491591595,
+        "fps": [
+          4.997448816386092,
+          5.06408146727124,
+          3.6981121241257084
+        ],
+        "errors": [
+          null,
+          null,
+          null
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 15.074674980335148,
+        "memory_mean_mib": 71.98333333333333,
+        "memory_peak_mib": 72.3359375,
+        "duration_seconds": 30.01616954198107,
+        "fps": [
+          5.030621904930578,
+          4.6641527595382835,
+          3.6313760770690924
+        ],
+        "errors": [
+          null,
+          null,
+          null
+        ]
+      }
+    },
+    {
+      "node": {
+        "cpu_percent_one_core": 14.623039010087572,
+        "memory_mean_mib": 130.5859375,
+        "memory_peak_mib": 130.9609375,
+        "duration_seconds": 30.360248625045642,
+        "fps": [
+          4.841857582112571,
+          4.512479515302192,
+          3.2937806681037896
+        ],
+        "errors": [
+          null,
+          null,
+          null
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 14.180486741767497,
+        "memory_mean_mib": 72.03098958333334,
+        "memory_peak_mib": 72.42578125,
+        "duration_seconds": 30.432559041073546,
+        "fps": [
+          4.928931536698945,
+          4.6989147316529944,
+          4.238881121561093
+        ],
+        "errors": [
+          null,
+          null,
+          null
+        ]
+      }
+    }
+  ],
+  "api_latency": {
+    "node": [
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.9121039183810353,
+        "p95_ms": 2.394834067672491
+      },
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7659795228391886,
+        "p95_ms": 1.5598339959979057
+      }
+    ],
+    "rust": [
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7055834867060184,
+        "p95_ms": 1.6107920091599226
+      },
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7814376149326563,
+        "p95_ms": 6.632083095610142
+      }
+    ]
+  }
+}

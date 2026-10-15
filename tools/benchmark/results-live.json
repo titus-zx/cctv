@@ -1,0 +1,203 @@
+{
+  "label": "live",
+  "arch": "aarch64",
+  "cpus_per_container": 2,
+  "memory_limit_mib": 1024,
+  "preview_fps": 5,
+  "recording": false,
+  "results": {
+    "node": {
+      "cpu_percent": 17.43002758086246,
+      "memory_mib": 113.347265625,
+      "fps_total": 13.670039369127446,
+      "api_p50_ms": 0.7181769469752908,
+      "api_p95_ms": 1.8225625390186906,
+      "api_errors": 0
+    },
+    "rust": {
+      "cpu_percent": 16.028085729498812,
+      "memory_mib": 59.143359375,
+      "fps_total": 14.01878154970342,
+      "api_p50_ms": 0.6848230259492993,
+      "api_p95_ms": 1.1790415737777948,
+      "api_errors": 0
+    }
+  },
+  "camera_ids_tested": [
+    0,
+    1,
+    2
+  ],
+  "idle": {
+    "node": {
+      "cpu_percent_one_core": 7.633891750955102,
+      "memory_mean_mib": 51.31953125,
+      "memory_peak_mib": 51.46484375,
+      "duration_seconds": 10.034685125108808,
+      "streams": []
+    },
+    "rust": {
+      "cpu_percent_one_core": 3.5574058365457835,
+      "memory_mean_mib": 1.29921875,
+      "memory_peak_mib": 1.375,
+      "duration_seconds": 10.032029416877776,
+      "streams": []
+    }
+  },
+  "streaming_rounds": [
+    {
+      "node": {
+        "cpu_percent_one_core": 15.785371833254716,
+        "memory_mean_mib": 113.071875,
+        "memory_peak_mib": 113.4296875,
+        "duration_seconds": 10.0359054999426,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.284615872503576,
+            "mib_per_second": 0.12416507995179803,
+            "first_frame_ms": 644.0553329885006,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 3.7864047245380434,
+            "mib_per_second": 0.17999698422921132,
+            "first_frame_ms": 3527.5369160808623,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 3.9856891837242565,
+            "mib_per_second": 0.1709492512978373,
+            "first_frame_ms": 1217.8293340839446,
+            "error": null
+          }
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 14.78338131103617,
+        "memory_mean_mib": 59.1171875,
+        "memory_peak_mib": 59.34375,
+        "duration_seconds": 10.035647250013426,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.982239685629954,
+            "mib_per_second": 0.1443844865622152,
+            "first_frame_ms": 913.4308330249041,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 3.886146954791364,
+            "mib_per_second": 0.18471209280362907,
+            "first_frame_ms": 1334.68783297576,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.085436542216562,
+            "mib_per_second": 0.1751291155732141,
+            "first_frame_ms": 1815.6692499760538,
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "node": {
+        "cpu_percent_one_core": 19.074683328470204,
+        "memory_mean_mib": 113.62265625,
+        "memory_peak_mib": 113.859375,
+        "duration_seconds": 10.01088179089129,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 5.693804121417477,
+            "mib_per_second": 0.1651606039010397,
+            "first_frame_ms": 644.0553329885006,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.99456501878726,
+            "mib_per_second": 0.2384329212787073,
+            "first_frame_ms": 3527.5369160808623,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.59499981728428,
+            "mib_per_second": 0.1974557832278416,
+            "first_frame_ms": 1217.8293340839446,
+            "error": null
+          }
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 17.27279014796145,
+        "memory_mean_mib": 59.16953125,
+        "memory_peak_mib": 59.4140625,
+        "duration_seconds": 10.010779875097796,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 5.094508183809383,
+            "mib_per_second": 0.14780028693678912,
+            "first_frame_ms": 913.4308330249041,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.994615866479788,
+            "mib_per_second": 0.23843534867004648,
+            "first_frame_ms": 1334.68783297576,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.994615866479788,
+            "mib_per_second": 0.21469042233276964,
+            "first_frame_ms": 1815.6692499760538,
+            "error": null
+          }
+        ]
+      }
+    }
+  ],
+  "api_latency": {
+    "node": [
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7228539325296879,
+        "p95_ms": 1.8303331453353167
+      },
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7134999614208937,
+        "p95_ms": 1.8147919327020645
+      }
+    ],
+    "rust": [
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7230000337585807,
+        "p95_ms": 1.2576670851558447
+      },
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.646646018140018,
+        "p95_ms": 1.100416062399745
+      }
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+name: v380-compare
+x-common: &common
+  user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+  init: true
+  restart: unless-stopped
+  cpus: 2
+  mem_limit: 1g
+  environment: &env
+    HOST: 0.0.0.0
+    PORT: "3380"
+    TZ: Asia/Jakarta
+    CONFIG_PATH: /app/runtime/config.json
+    RECORDING_RETENTION_DAYS: "0"
+    HOME: /tmp
+services:
+  node:
+    <<: *common
+    build:
+      context: .
+      dockerfile: .benchmark/Dockerfile.node
+    image: v380-benchmark:node
+    environment:
+      <<: *env
+      PUBLIC_PORT: "3381"
+    ports: ["127.0.0.1:3381:3380"]
+    volumes: ["./.benchmark/config-node:/app/runtime"]
+  rust:
+    <<: *common
+    build:
+      context: .benchmark/rust
+    image: v380-benchmark:rust
+    environment:
+      <<: *env
+      PUBLIC_PORT: "3382"
+    ports: ["127.0.0.1:3382:3380"]
+    volumes: ["./.benchmark/config-rust:/app/runtime"]
+  fixture:
+    profiles: ["fixture"]
+    image: v380-benchmark:node
+    init: true
+    command: ["node", "/fixtures/camera.js"]
+    cpus: 1
+    mem_limit: 256m
+    volumes:
+      - ./tools/benchmark:/fixtures:ro
+      - ./.benchmark/media:/media:ro
+    networks:
+      default:
+        ipv4_address: 172.29.199.10
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.29.199.0/24
