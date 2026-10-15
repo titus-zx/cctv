@@ -43,11 +43,16 @@ if (!fs.existsSync(rcloneConfig)) {
     console.log('Konfigurasi rclone disalin untuk container.');
   }
 }
+const hardwareCompose = path.join(data, 'hardware.compose.json');
+const renderDevice = '/dev/dri/renderD128';
+const hardware = fs.existsSync(renderDevice) ? {devices: [`${renderDevice}:${renderDevice}`],
+  group_add: [String(fs.statSync(renderDevice).gid)]} : {};
+fs.writeFileSync(hardwareCompose, JSON.stringify({services:{viewer:hardware}},null,2)+'\n', {mode:0o600});
 const args = process.argv.slice(2);
 if (!args.length || args[0] === 'setup') {
   console.log('Siap. Jalankan npm run docker:up; viewer Docker tersedia di http://localhost:3381.');
 } else {
-  const result = spawnSync('docker',['compose','--env-file',envPath,'-f',path.join(root,'compose.yaml'),'-f',storageCompose,...args],{cwd:root,stdio:'inherit'});
+  const result = spawnSync('docker',['compose','--env-file',envPath,'-f',path.join(root,'compose.yaml'),'-f',storageCompose,'-f',hardwareCompose,...args],{cwd:root,stdio:'inherit'});
   if (result.error) {console.error(result.error.message);process.exitCode=1;}
   else process.exitCode = result.status ?? 1;
 }

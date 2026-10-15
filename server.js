@@ -19,7 +19,6 @@ const cameraSnapshot = () => viewers.map((viewer,id) => ({id,...viewer.status()}
 const cameraEvents = new CameraEvents(cameraSnapshot);
 const port = Number(process.env.PORT || cfg.port || 3380);
 const publicPort = Number(process.env.PUBLIC_PORT || port);
-const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `localhost:${publicPort}`, `127.0.0.1:${publicPort}`]);
 const json = (res, code, data) => {res.writeHead(code, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
 async function body(req) {
   let text = '';
@@ -34,8 +33,7 @@ function saveConfig() {
 const server = http.createServer(async (req, res) => {
   try {
     const host = req.headers.host || '';
-    if (!allowedHosts.has(host)) return json(res, 403, {error:'Akses hanya melalui localhost.'});
-    if (req.method === 'POST' && req.headers.origin && ![...allowedHosts].some(host => req.headers.origin === `http://${host}`))
+    if (req.method === 'POST' && req.headers.origin && !['http:', 'https:'].some(protocol => req.headers.origin === `${protocol}//${host}`))
       return json(res, 403, {error:'Origin tidak diizinkan.'});
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/api/cameras')
@@ -79,10 +77,11 @@ const server = http.createServer(async (req, res) => {
       if (match[1] === 'stream' && req.method === 'GET') return viewer.subscribe(res);
       if (match[1] === 'audio' && req.method === 'GET') return viewer.subscribeAudio(res);
       if (match[1] === 'snapshot' && req.method === 'GET') {
-        if (!viewer.lastJpeg || viewer.state !== 'live') return json(res,503,{error:'Gambar kamera belum tersedia.'});
+        let jpeg;
+        try { jpeg = await viewer.snapshot(); } catch (error) { return json(res,503,{error:error.message}); }
         res.writeHead(200, {'Content-Type':'image/jpeg','Cache-Control':'no-store',
           'Content-Disposition':`attachment; filename="v380-${viewer.camera.deviceId}-${Date.now()}.jpg"`});
-        return res.end(viewer.lastJpeg);
+        return res.end(jpeg);
       }
       if (match[1] === 'api/cameras' && req.method === 'POST') {
         if (match[3] === 'talk') { // raw G.711 A-law, 8 kHz mono, at most 480 bytes per request

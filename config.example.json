@@ -22,7 +22,10 @@
       "password": "GANTI_PASSWORD",
       "v380Port": 8800,
       "mode": "v380",
-      "quality": "hd"
+      "quality": "hd",
+      "previewFps": 5,
+      "recordingCrf": 22,
+      "recordingEncoder": "auto"
     }
   ]
 }

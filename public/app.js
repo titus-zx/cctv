@@ -148,7 +148,7 @@ function render(camera) {
   card.querySelector('.camera-address').textContent = camera.mode === 'cloud' ? 'Internet · Cloud V380' : `${camera.ip} · ${camera.mode.toUpperCase()}`;
   card.querySelector('.device-id').textContent = `DEVICE ID ${camera.deviceId || '—'}`;
   card.querySelector('.resolution').textContent = camera.width && camera.height ? `${camera.width} × ${camera.height}` : '—';
-  card.querySelector('.status-text').textContent = live ? 'Terhubung' : camera.state==='error' ? 'Koneksi bermasalah' : 'Menghubungkan…';
+  card.querySelector('.status-text').textContent = live ? (camera.previewError ? 'Terhubung · tampilan bermasalah' : 'Terhubung') : camera.state==='error' ? 'Koneksi bermasalah' : 'Menghubungkan…';
   const img = card.querySelector('.video');
   if (!img.hasAttribute('src')) img.src = `/stream/${camera.id}?t=${Date.now()}`;
   img.hidden = !live;
