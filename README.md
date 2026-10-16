@@ -16,6 +16,8 @@ docker compose --env-file docker-data/compose.env \
   up -d --build
 ```
 
+Sebelumnya isi `ACCESS_PIN=123456` (6 digit angka, ganti dengan PIN Anda) di `docker-data/compose.env`; compose menolak berjalan tanpa nilai ini. `docker setup` membuat PIN acak untuk instalasi baru.
+
 Viewer tersedia di `http://localhost:3381`. Image branch ini bernama `v380-viewer:rust`. Compose memakai project/service yang sama, sehingga `up` mengganti container viewer yang sedang berjalan. File konfigurasi dan rekaman dipertahankan.
 
 Untuk instalasi baru atau untuk CLI:
@@ -29,6 +31,10 @@ cargo run -- docker down
 
 CLI menyiapkan folder berizin privat, menyalin konfigurasi/rclone jika belum ada, dan membuat overlay `/dev/dri/renderD128` serta grup render jika perangkat tersedia. Konfigurasi yang sudah ada tidak ditimpa.
 
+## Akses dengan PIN
+
+Semua halaman, API, stream, dan rekaman hanya bisa diakses setelah memasukkan PIN 6 digit pada `/login`. PIN dibaca dari environment `ACCESS_PIN`; server menolak start jika kosong atau bukan 6 digit. Sesi berlaku tepat 5 menit sejak login (tidak diperpanjang oleh aktivitas), setelah itu halaman diarahkan kembali ke login. Lima PIN salah berturut-turut mengunci login selama 60 detik. Sesi disimpan di memori, jadi restart server mengeluarkan semua sesi. Layani lewat HTTPS (reverse proxy) bila diakses dari luar jaringan rumah, karena PIN dikirim apa adanya.
+
 ## Pengembangan lokal
 
 Gunakan Rust 1.99, FFmpeg, dan rclone jika memakai penyimpanan cloud. Frontend menggunakan `wasm-bindgen-cli` 0.2.105, sama dengan versi crate yang dikunci.
@@ -41,7 +47,7 @@ wasm-bindgen --target web --out-dir public/pkg \
   target/wasm32-unknown-unknown/release/cctv_ui.wasm
 cp config.example.json config.json
 # Isi password kamera dan tujuan rekaman pada config.json.
-cargo run -- serve
+ACCESS_PIN=123456 cargo run -- serve
 ```
 
 Server lokal mendengarkan `127.0.0.1:3380`. `CONFIG_PATH`, `HOST`, `PORT`, `PUBLIC_PORT`, `PUBLIC_DIR`, `FFMPEG_PATH`, `RCLONE_PATH`, dan `RCLONE_CONFIG` dapat diatur melalui environment.

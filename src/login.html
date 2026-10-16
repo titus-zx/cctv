@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1016"><meta name="robots" content="noindex"><title>V380 · Masuk</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"></head>
+<body class="login-body">
+<form class="login" method="post" action="/login" autocomplete="off">
+<img class="login-logo" src="/favicon.svg" alt="" width="56" height="56">
+<h1>CCTV Mas Titus</h1>
+<label for="pin">Masukkan PIN</label>
+<input id="pin" name="pin" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="off" autofocus required placeholder="••••••">
+<p class="login-error" role="alert">{{error}}</p>
+<button class="button primary" type="submit">Masuk</button>
+</form>
+</body></html>

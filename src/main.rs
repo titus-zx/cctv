@@ -1,5 +1,6 @@
 use anyhow::Result;
 use cctv::{
+    auth::Auth,
     camera,
     config::{Config, RetentionSettings},
     recording,
@@ -17,6 +18,8 @@ async fn main() -> Result<()> {
         return cctv::cli::run(args).await;
     }
     let path = PathBuf::from(std::env::var("CONFIG_PATH").unwrap_or_else(|_| "config.json".into()));
+    // Fail closed: never serve cameras without a PIN.
+    let auth = Arc::new(Auth::from_env()?);
     let cfg = Config::load(&path)?;
     let retention = RetentionSettings::new(cfg.recording.as_ref())?;
     let port = std::env::var("PORT")
@@ -83,7 +86,7 @@ async fn main() -> Result<()> {
     }
     let listener = tokio::net::TcpListener::bind(format!("{host}:{port}")).await?;
     println!(
-        "V380 Viewer Rust: http://{host}:{}",
+        "CCTV Mas Titus Rust: http://{host}:{}",
         std::env::var("PUBLIC_PORT").unwrap_or_else(|_| port.to_string())
     );
     let shutdown = cancel.clone();
@@ -93,9 +96,10 @@ async fn main() -> Result<()> {
         tokio::select! {_ = tokio::signal::ctrl_c()=>{},_=terminate.recv()=>{}}
         shutdown.cancel();
     });
-    let router = server::router(
+    let router = server::router_with_auth(
         app,
         PathBuf::from(std::env::var("PUBLIC_DIR").unwrap_or_else(|_| "public".into())),
+        Some(auth),
     );
     let stopped = cancel.clone();
     let server = tokio::spawn(async move {

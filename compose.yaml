@@ -11,6 +11,7 @@ services:
       PORT: "3380"
       PUBLIC_PORT: "${VIEWER_PORT:-3381}"
       TZ: Asia/Jakarta
+      ACCESS_PIN: "${ACCESS_PIN:?Isi ACCESS_PIN (6 digit angka) di docker-data/compose.env}"
       CONFIG_PATH: /app/runtime/config.json
       RCLONE_CONFIG: /app/rclone/rclone.conf
       HOME: /tmp

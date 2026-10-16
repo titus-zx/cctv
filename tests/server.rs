@@ -3,6 +3,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use cctv::{
+    auth::Auth,
     camera,
     config::{Config, RetentionSettings},
     server::{self, App},
@@ -207,4 +208,86 @@ async fn preview_demand_is_released_with_client() {
     );
     stop.cancel();
     task.await.unwrap();
+}
+
+async fn call(
+    router: &axum::Router,
+    method: &str,
+    uri: &str,
+    cookie: Option<&str>,
+    body: &str,
+) -> axum::response::Response {
+    let mut request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("host", "localhost:3380")
+        .header("content-type", "application/x-www-form-urlencoded");
+    if let Some(cookie) = cookie {
+        request = request.header("cookie", cookie);
+    }
+    router
+        .clone()
+        .oneshot(request.body(Body::from(body.to_owned())).unwrap())
+        .await
+        .unwrap()
+}
+fn cookie_of(response: &axum::response::Response) -> String {
+    let value = response.headers()["set-cookie"].to_str().unwrap();
+    assert!(value.contains("HttpOnly") && value.contains("SameSite=Strict"));
+    assert!(value.contains("Max-Age=300"));
+    value.split(';').next().unwrap().to_owned()
+}
+#[tokio::test]
+async fn pin_gate_blocks_everything_until_login_and_locks_out_guessing() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("index.html"), "secret page").unwrap();
+    let (app, _, stop, task) = fixture(dir.path()).await;
+    let auth = Arc::new(Auth::new("123456").unwrap());
+    let router = server::router_with_auth(app, dir.path().into(), Some(auth));
+    for uri in ["/api/cameras", "/stream/0", "/snapshot/0", "/recordings/x.mp4"] {
+        assert_eq!(call(&router, "GET", uri, None, "").await.status(), StatusCode::UNAUTHORIZED, "{uri}");
+    }
+    for uri in ["/", "/index.html", "/pkg/cctv_ui.js", "/bootstrap.js"] {
+        let response = call(&router, "GET", uri, None, "").await;
+        assert_eq!(response.status(), StatusCode::SEE_OTHER, "{uri}");
+        assert_eq!(response.headers()["location"], "/login");
+    }
+    assert_eq!(call(&router, "GET", "/login", None, "").await.status(), StatusCode::OK);
+    let forged = Some("cctv_session=deadbeef");
+    assert_eq!(call(&router, "GET", "/api/cameras", forged, "").await.status(), StatusCode::UNAUTHORIZED);
+    // Wrong guesses never create a session; the fifth locks even the right PIN out.
+    for _ in 0..4 {
+        let response = call(&router, "POST", "/login", None, "pin=000000").await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(response.headers().get("set-cookie").is_none());
+    }
+    assert_eq!(call(&router, "POST", "/login", None, "pin=000000").await.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(call(&router, "POST", "/login", None, "pin=123456").await.status(), StatusCode::TOO_MANY_REQUESTS);
+    stop.cancel();
+    let _ = task.await;
+}
+#[tokio::test]
+async fn correct_pin_grants_session_that_expires() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("index.html"), "secret page").unwrap();
+    let (app, _, stop, task) = fixture(dir.path()).await;
+    let auth = Arc::new(Auth::with_ttl("123456", std::time::Duration::from_millis(400)).unwrap());
+    let router = server::router_with_auth(app, dir.path().into(), Some(auth));
+    let response = call(&router, "POST", "/login", None, "pin=123456").await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    let cookie = cookie_of(&response);
+    assert_eq!(call(&router, "GET", "/api/cameras", Some(&cookie), "").await.status(), StatusCode::OK);
+    assert_eq!(call(&router, "GET", "/", Some(&cookie), "").await.status(), StatusCode::OK);
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    assert_eq!(call(&router, "GET", "/api/cameras", Some(&cookie), "").await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(call(&router, "GET", "/", Some(&cookie), "").await.status(), StatusCode::SEE_OTHER);
+    stop.cancel();
+    let _ = task.await;
+}
+#[test]
+fn pin_must_be_six_digits() {
+    for bad in ["", "12345", "1234567", "12345a", "١٢٣٤٥٦"] {
+        assert!(Auth::new(bad).is_err(), "{bad}");
+    }
+    assert!(Auth::new("000123").is_ok());
 }

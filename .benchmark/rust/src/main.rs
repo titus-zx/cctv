@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
     }
     let listener = tokio::net::TcpListener::bind(format!("{host}:{port}")).await?;
     println!(
-        "V380 Viewer Rust: http://{host}:{}",
+        "CCTV Mas Titus Rust: http://{host}:{}",
         std::env::var("PUBLIC_PORT").unwrap_or_else(|_| port.to_string())
     );
     let shutdown = cancel.clone();

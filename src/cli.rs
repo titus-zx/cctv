@@ -112,9 +112,10 @@ async fn docker(args: &[String]) -> Result<()> {
         secure_write(
             &env,
             format!(
-                "LOCAL_UID={}\nLOCAL_GID={}\nVIEWER_PORT=3381\n",
+                "LOCAL_UID={}\nLOCAL_GID={}\nVIEWER_PORT=3381\nACCESS_PIN={:06}\n",
                 unsafe { libc::getuid() },
-                unsafe { libc::getgid() }
+                unsafe { libc::getgid() },
+                rand::Rng::gen_range(&mut rand::rngs::OsRng, 0..1_000_000u32)
             )
             .as_bytes(),
         )?;

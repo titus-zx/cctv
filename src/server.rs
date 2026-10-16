@@ -1,4 +1,5 @@
 use crate::{
+    auth::{self, Auth, LoginError},
     camera::{CameraCommand, CameraHandle},
     config::{Config, RetentionSettings},
     storage::{self, ByteRange, RetentionStatus, Store},
@@ -6,7 +7,7 @@ use crate::{
 use axum::{
     Json, Router,
     body::{Body, Bytes},
-    extract::{DefaultBodyLimit, Path, Query, State},
+    extract::{DefaultBodyLimit, Extension, Path, Query, State},
     http::{HeaderMap, Request, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -51,7 +52,11 @@ impl IntoResponse for ApiError {
 }
 type ApiResult = std::result::Result<Response, ApiError>;
 pub fn router(app: Arc<App>, public_dir: PathBuf) -> Router {
-    Router::new()
+    router_with_auth(app, public_dir, None)
+}
+/// With `auth`, every path except the login page and its assets requires a valid session.
+pub fn router_with_auth(app: Arc<App>, public_dir: PathBuf, auth: Option<Arc<Auth>>) -> Router {
+    let mut router = Router::new()
         .route("/api/cameras", get(cameras))
         .route("/api/retention", get(retention))
         .route("/api/recordings", get(recordings))
@@ -64,9 +69,88 @@ pub fn router(app: Arc<App>, public_dir: PathBuf) -> Router {
         .route("/snapshot/{id}", get(snapshot))
         .route("/recordings/{name}", get(clip))
         .fallback_service(ServeDir::new(public_dir))
-        .layer(DefaultBodyLimit::max(16384))
-        .layer(middleware::from_fn(headers))
-        .with_state(app)
+        .layer(DefaultBodyLimit::max(16384));
+    if let Some(auth) = auth {
+        router = router
+            .route("/login", get(login_page).post(login_submit))
+            .layer(middleware::from_fn_with_state(auth.clone(), guard))
+            .layer(Extension(auth));
+    }
+    router.layer(middleware::from_fn(headers)).with_state(app)
+}
+const LOGIN_PAGE: &str = include_str!("login.html");
+fn login_html(status: StatusCode, error: &str) -> Response {
+    (
+        status,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        LOGIN_PAGE.replace("{{error}}", error),
+    )
+        .into_response()
+}
+fn session_token(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(';'))
+        .filter_map(|pair| pair.trim().split_once('='))
+        .find_map(|(name, value)| (name == auth::COOKIE).then_some(value))
+}
+/// Default deny: only the login page and the assets it needs are public.
+async fn guard(
+    State(auth): State<Arc<Auth>>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+    if matches!(path, "/login" | "/style.css" | "/favicon.svg")
+        || session_token(request.headers()).is_some_and(|t| auth.valid(t))
+    {
+        return next.run(request).await;
+    }
+    let api = ["/api/", "/stream/", "/audio/", "/snapshot/", "/recordings/"]
+        .iter()
+        .any(|p| path.starts_with(p));
+    if api {
+        ApiError(StatusCode::UNAUTHORIZED, "Sesi berakhir; masukkan PIN lagi.".into())
+            .into_response()
+    } else {
+        axum::response::Redirect::to("/login").into_response()
+    }
+}
+async fn login_page(Extension(auth): Extension<Arc<Auth>>, headers: HeaderMap) -> Response {
+    if session_token(&headers).is_some_and(|t| auth.valid(t)) {
+        return axum::response::Redirect::to("/").into_response();
+    }
+    login_html(StatusCode::OK, "")
+}
+async fn login_submit(Extension(auth): Extension<Arc<Auth>>, body: Bytes) -> Response {
+    let pin = url::form_urlencoded::parse(&body)
+        .find(|(k, _)| k == "pin")
+        .map(|(_, v)| v.into_owned())
+        .unwrap_or_default();
+    match auth.login(pin.trim()) {
+        Ok(token) => (
+            StatusCode::SEE_OTHER,
+            [
+                (header::LOCATION, "/".to_owned()),
+                (
+                    header::SET_COOKIE,
+                    format!(
+                        "{}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={}",
+                        auth::COOKIE,
+                        auth::SESSION_TTL.as_secs()
+                    ),
+                ),
+            ],
+        )
+            .into_response(),
+        Err(LoginError::Wrong) => login_html(StatusCode::UNAUTHORIZED, "PIN salah."),
+        Err(LoginError::Locked(seconds)) => login_html(
+            StatusCode::TOO_MANY_REQUESTS,
+            &format!("Terlalu banyak percobaan. Coba lagi dalam {seconds} detik."),
+        ),
+    }
 }
 async fn headers(request: Request<Body>, next: Next) -> Response {
     if request.method() == axum::http::Method::POST

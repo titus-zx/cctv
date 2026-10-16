@@ -153,6 +153,10 @@ async fn response(url: &str, body: Option<&Value>) -> Result<Response, JsValue> 
     let response = JsFuture::from(window().fetch_with_str_and_init(url, &init))
         .await?
         .dyn_into::<Response>()?;
+    if response.status() == 401 {
+        // Session expired: force the PIN page again.
+        let _ = window().location().assign("/login");
+    }
     Ok(response)
 }
 async fn api(url: &str, body: Option<Value>) -> Result<Value, JsValue> {
