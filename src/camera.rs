@@ -225,6 +225,7 @@ async fn run(
     let mut sample_time = Instant::now();
     let mut sample_frames = 0u64;
     let mut fps = 10.0;
+    let mut fps_ready = false;
     let mut audio_seen = false;
     let mut last_jpeg = Instant::now() - Duration::from_secs(1);
     let mut preview_retry = Instant::now();
@@ -322,11 +323,12 @@ async fn run(
                     sample_frames = 0;
                 }
                 sample_frames += 1;
-                if sample_time.elapsed() >= Duration::from_secs(3) {
+                // Frames arrive in bursts, so average over the whole connection rather than a
+                // short window; the estimate only becomes usable after a few bursts.
+                if sample_time.elapsed() >= Duration::from_secs(8) {
                     fps = (sample_frames as f64 / sample_time.elapsed().as_secs_f64())
                         .clamp(1.0, 60.0);
-                    sample_time = now;
-                    sample_frames = 0;
+                    fps_ready = true;
                 }
                 {
                     let mut s = handle.status.lock().await;
@@ -339,8 +341,7 @@ async fn run(
                 if let Some(recorder) = recorder.as_mut() {
                     if recorder.ready()
                         && frame.keyframe
-                        && (audio_seen
-                            || first_frame.is_some_and(|t| t.elapsed() > Duration::from_secs(3)))
+                        && fps_ready
                         && recorder
                             .start(Some(frame.codec), audio_seen, fps)
                             .await

@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use cctv::{
     config::{Camera, Recording},
-    process::{self, ManagedProcess, Output},
+    process::{self, ManagedProcess, Output, Pace},
     protocol::{Codec, Frame},
     recording::{Recorder, finalized_mp4},
     storage::{Store, UploadQueue},
@@ -237,4 +237,53 @@ async fn delayed_reader_preserves_accepted_video_beyond_three_seconds() {
     process.shutdown().await;
     assert_eq!(received.as_slice(), frame.as_ref());
     assert!(process.closed());
+}
+
+#[tokio::test]
+async fn paced_input_spreads_camera_bursts_evenly() {
+    let (tx, mut events) = mpsc::channel(256);
+    let mut command = tokio::process::Command::new("cat");
+    command.kill_on_drop(true);
+    let pace = Pace {
+        fps: 33.0,
+        buffer: Duration::from_millis(500),
+    };
+    let mut process = ManagedProcess::spawn_paced(
+        command,
+        false,
+        tx,
+        Duration::from_secs(2),
+        8 * 1024 * 1024,
+        Some(pace),
+    )
+    .unwrap();
+    // The camera delivers 20 frames at once, then nothing for 600ms (~33fps on average).
+    let input = process.input.clone();
+    tokio::spawn(async move {
+        for _ in 0..5 {
+            for _ in 0..20 {
+                assert!(input.send(Bytes::from_static(b"frame")));
+            }
+            tokio::time::sleep(Duration::from_millis(600)).await;
+        }
+    });
+    let (mut arrivals, mut total) = (vec![], 0);
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while total < 100 * 5 {
+            if let Some(Output::Stdout(data)) = events.recv().await {
+                total += data.len();
+                arrivals.push(tokio::time::Instant::now());
+            }
+        }
+    })
+    .await
+    .unwrap();
+    process.shutdown().await;
+    let longest = arrivals
+        .windows(2)
+        .map(|w| w[1] - w[0])
+        .max()
+        .unwrap_or_default();
+    // Unpaced, every burst is followed by a ~600ms stall.
+    assert!(longest < Duration::from_millis(250), "stall of {longest:?}");
 }

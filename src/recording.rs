@@ -1,6 +1,6 @@
 use crate::{
     config::{Camera, Recording},
-    process::{self, ManagedProcess, Output},
+    process::{self, ManagedProcess, Output, Pace},
     protocol::{Codec, Frame},
     storage::{UploadQueue, parse_name},
 };
@@ -293,12 +293,18 @@ impl Recorder {
             &format!("cam{id}_%Y%m%d_%H%M%S.mp4"),
         ]);
         let (sender, events) = mpsc::channel(64);
-        let process = ManagedProcess::spawn(
+        // Camera frames arrive in ~1s bursts; pace them so FFmpeg's wall-clock timestamps are even.
+        let pace = codec.map(|_| Pace {
+            fps,
+            buffer: Duration::from_millis(1500),
+        });
+        let process = ManagedProcess::spawn_paced(
             command,
             audio,
             sender,
             Duration::from_secs(5),
             8 * 1024 * 1024,
+            pace,
         )?;
         self.process = Some(process);
         self.events = events;

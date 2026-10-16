@@ -10,7 +10,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -24,9 +24,17 @@ pub enum Output {
     Progress(i64),
     Closed(bool),
 }
+/// Smooths bursty camera delivery before FFmpeg stamps packets with the wall clock.
+/// The camera sends about one second of frames at once; without this the recording stalls
+/// for a second and then fast-forwards.
+#[derive(Clone, Copy)]
+pub struct Pace {
+    pub fps: f64,
+    pub buffer: Duration,
+}
 #[derive(Clone)]
 pub struct BufferedInput {
-    sender: mpsc::Sender<Bytes>,
+    sender: mpsc::Sender<(Instant, Bytes)>,
     queued: Arc<AtomicUsize>,
     limit: usize,
 }
@@ -42,29 +50,66 @@ impl BufferedInput {
         {
             return false;
         }
-        if self.sender.try_send(data).is_err() {
+        if self.sender.try_send((Instant::now(), data)).is_err() {
             self.queued.fetch_sub(len, Ordering::AcqRel);
             return false;
         }
         true
     }
 }
+/// `video` paces each message by queue depth; `delay` only shifts messages (used for audio so
+/// it stays aligned with the buffered video).
+enum Timing {
+    None,
+    Video(Pace),
+    Delay(Duration),
+}
 fn input<W: AsyncWrite + Unpin + Send + 'static>(
     mut writer: W,
     limit: usize,
+    timing: Timing,
     cancel: CancellationToken,
 ) -> BufferedInput {
-    let (sender, mut receiver) = mpsc::channel::<Bytes>(512);
+    let (sender, mut receiver) = mpsc::channel::<(Instant, Bytes)>(512);
     let queued = Arc::new(AtomicUsize::new(0));
     let count = queued.clone();
     tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _=cancel.cancelled()=>{receiver.close();while let Some(data)=receiver.recv().await{if !matches!(tokio::time::timeout(Duration::from_secs(2),writer.write_all(&data)).await,Ok(Ok(()))){break}count.fetch_sub(data.len(),Ordering::AcqRel);}break},
-                data=receiver.recv()=>match data{
-                    Some(data)=>{let result=writer.write_all(&data).await;count.fetch_sub(data.len(),Ordering::AcqRel);if result.is_err(){break}},
-                    None=>break
+        let mut next: Option<Instant> = None;
+        'outer: loop {
+            let (arrived, data) = tokio::select! {
+                _=cancel.cancelled()=>{receiver.close();while let Some((_,data))=receiver.recv().await{if !matches!(tokio::time::timeout(Duration::from_secs(2),writer.write_all(&data)).await,Ok(Ok(()))){break}count.fetch_sub(data.len(),Ordering::AcqRel);}break},
+                data=receiver.recv()=>match data{Some(data)=>data,None=>break}
+            };
+            let slot = match timing {
+                Timing::None => None,
+                Timing::Delay(delay) => Some(arrived + delay),
+                Timing::Video(pace) => {
+                    let base = Duration::from_secs_f64(1.0 / pace.fps);
+                    // Frames behind schedule by more than one step mean the queue ran dry: resync.
+                    let slot = match next {
+                        Some(next) if next + base >= Instant::now() => next,
+                        Some(_) => Instant::now(),
+                        None => arrived + pace.buffer,
+                    };
+                    // Aim to keep `buffer` worth of frames queued: speed up when deeper, slow down
+                    // when shallower, by at most 30%, so a wrong fps estimate self-corrects.
+                    let target = (pace.fps * pace.buffer.as_secs_f64()).max(1.0);
+                    let factor = (1.0 - 0.15 * (receiver.len() as f64 - target) / target)
+                        .clamp(0.7, 1.3);
+                    next = Some(slot + base.mul_f64(factor));
+                    Some(slot)
                 }
+            };
+            if let Some(slot) = slot {
+                tokio::select! {
+                    _=cancel.cancelled()=>{}
+                    _=tokio::time::sleep_until(slot.into())=>{}
+                }
+            }
+            let result = writer.write_all(&data).await;
+            count.fetch_sub(data.len(), Ordering::AcqRel);
+            if result.is_err() {
+                break 'outer;
             }
         }
         let _ = tokio::time::timeout(Duration::from_millis(200), writer.shutdown()).await;
@@ -83,11 +128,21 @@ pub struct ManagedProcess {
 }
 impl ManagedProcess {
     pub fn spawn(
+        command: Command,
+        audio: bool,
+        events: mpsc::Sender<Output>,
+        grace: Duration,
+        limit: usize,
+    ) -> Result<Self> {
+        Self::spawn_paced(command, audio, events, grace, limit, None)
+    }
+    pub fn spawn_paced(
         mut command: Command,
         audio: bool,
         events: mpsc::Sender<Output>,
         grace: Duration,
         limit: usize,
+        pace: Option<Pace>,
     ) -> Result<Self> {
         command
             .stdin(Stdio::piped())
@@ -119,8 +174,16 @@ impl ManagedProcess {
         let mut child = command.spawn()?;
         drop(audio_child);
         let input_cancel = CancellationToken::new();
-        let video = input(child.stdin.take().unwrap(), limit, input_cancel.clone());
-        let audio = audio_parent.map(|writer| input(writer, 1024 * 1024, input_cancel.clone()));
+        let video_timing = pace.map_or(Timing::None, Timing::Video);
+        let audio_timing = pace.map_or(Timing::None, |p| Timing::Delay(p.buffer));
+        let video = input(
+            child.stdin.take().unwrap(),
+            limit,
+            video_timing,
+            input_cancel.clone(),
+        );
+        let audio = audio_parent
+            .map(|writer| input(writer, 1024 * 1024, audio_timing, input_cancel.clone()));
         let mut stdout = child.stdout.take().unwrap();
         let out = events.clone();
         let stdout_task = tokio::spawn(async move {
