@@ -28,6 +28,10 @@ pub struct Clip {
     pub device_id: String,
     pub start: DateTime<Utc>,
     pub size: u64,
+    /// Thumbnail exists when present; value is the peak keyframe-to-keyframe scene change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motion: Option<f32>,
+    pub moving: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera_id: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,10 +60,21 @@ pub fn parse_name(name: &str, size: u64) -> Option<Clip> {
         device_id: parts[0].into(),
         start: time.with_timezone(&Utc),
         size,
+        motion: None,
+        moving: false,
         camera_id: None,
         camera: None,
     })
 }
+impl Clip {
+    pub fn set_motion(&mut self, motion: Option<f32>) {
+        self.motion = motion;
+        self.moving = motion.is_some_and(|m| m >= MOTION_THRESHOLD);
+    }
+}
+/// Scene-change score (0..1) above which a clip counts as having movement. Sensor noise on a
+/// still scene measures well below this.
+pub const MOTION_THRESHOLD: f32 = 0.008;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ByteRange {
     Full,
@@ -109,9 +124,8 @@ pub fn byte_range(header: Option<&str>, size: u64) -> ByteRange {
 }
 impl Store {
     pub fn new(recording: &Recording) -> Self {
-        let remote = recording.destination != "local";
         Self {
-            index: Arc::new(Index::new(remote.then(|| index_path(&recording.dir)))),
+            index: Arc::new(Index::new(Some(index_path(&recording.dir)))),
             dir: recording.dir.clone(),
             remote: if recording.destination == "local" {
                 None
@@ -201,6 +215,8 @@ impl Store {
                 entry.metadata().await?.len(),
             ) && clip.start.with_timezone(&Local).date_naive() == date
             {
+                let mut clip = clip;
+                clip.set_motion(self.index.motion(&clip.name));
                 clips.push(clip);
             }
         }
@@ -329,6 +345,8 @@ impl UploadQueue {
             loop {
                 let file = tokio::select! {_ = cancel.cancelled()=>break,file=receiver.recv()=>match file{Some(file)=>file,None=>break}};
                 let mut attempts = 0;
+                // Before upload: with keepLocal off the video leaves this disk right after.
+                store.ensure_thumb(&file).await;
                 loop {
                     if !file.exists() {
                         set.lock().await.remove(&file);
@@ -458,11 +476,47 @@ pub async fn clean_retention(
             && finalized_mp4(&entry.path())
         {
             tokio::fs::remove_file(entry.path()).await?;
+            store.index.remove(&name);
             status.deleted_local += 1;
         }
     }
+    clean_thumbs(store, &expired, uploaded.as_ref()).await;
     status.error = None;
     Ok(())
+}
+/// Thumbnails follow their clip: removed when the clip expires, and when the clip is gone from
+/// both local disk and the remote (orphans), plus abandoned temp files.
+async fn clean_thumbs(
+    store: &Store,
+    expired: impl Fn(&str) -> bool,
+    uploaded: Option<&HashSet<String>>,
+) {
+    let dir = crate::thumbs::thumb_dir(&store.dir);
+    let Ok(mut entries) = tokio::fs::read_dir(&dir).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let file = entry.file_name().to_string_lossy().into_owned();
+        let old = entry
+            .metadata()
+            .await
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > crate::thumbs::GRACE);
+        let remove = match crate::thumbs::clip_name(&file) {
+            Some(name) => {
+                expired(&name)
+                    || (old
+                        && !store.dir.join(&name).exists()
+                        && uploaded.is_none_or(|u| !u.contains(&name)))
+            }
+            None => old,
+        };
+        if remove && entry.file_type().await.is_ok_and(|t| t.is_file()) {
+            let _ = tokio::fs::remove_file(entry.path()).await;
+        }
+    }
 }
 pub fn retention_json(settings: RetentionSettings, status: &RetentionStatus) -> Value {
     let mut value = serde_json::to_value(status).unwrap();

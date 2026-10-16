@@ -49,10 +49,10 @@ async fn main() -> Result<()> {
         let _ = recording::hardware_available().await;
     }
     let mut tasks = vec![];
-    if let Some(store) = store.clone().filter(|s| s.remote.is_some()) {
+    if let Some(store) = store.clone() {
         let stop = cancel.clone();
         tasks.push(tokio::spawn(async move {
-            // Keep the playback index fresh in the background; the page only reads the index.
+            // Keep the playback index (clips, thumbnails, motion) fresh in the background.
             let mut ticks = 0u32;
             loop {
                 if ticks % 40 == 0 {

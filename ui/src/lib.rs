@@ -95,6 +95,12 @@ fn value(selector: &str) -> String {
         .map(|e| get(e.as_ref(), "value").as_string().unwrap_or_default())
         .unwrap_or_default()
 }
+fn checked(selector: &str) -> bool {
+    q(selector)
+        .ok()
+        .and_then(|e| get(e.as_ref(), "checked").as_bool())
+        .unwrap_or(false)
+}
 fn value_at(selector: &str, v: &str) {
     if let Ok(e) = q(selector) {
         set(e.as_ref(), "value", v)
@@ -516,6 +522,10 @@ async fn load(keep_page: bool) {
         ("date", value("#pb-date")),
         ("from", value("#pb-from")),
         ("to", value("#pb-to")),
+        (
+            "motion",
+            if checked("#pb-motion") { "1" } else { "0" }.into(),
+        ),
         ("page", UI.with(|ui| ui.borrow().page.to_string())),
         ("size", "50".into()),
     ]);
@@ -549,6 +559,24 @@ async fn load(keep_page: bool) {
                     if let Ok(li) = document().create_element("li") {
                         if let Ok(button) = document().create_element("button") {
                             let _ = button.set_attribute("data-index", &i.to_string());
+                            if clip["moving"] == true {
+                                button.set_class_name("moving");
+                            }
+                            if clip["motion"].is_number()
+                                && let Ok(img) = document().create_element("img")
+                            {
+                                img.set_class_name("pb-thumb");
+                                let _ = img.set_attribute("loading", "lazy");
+                                let _ = img.set_attribute("alt", "");
+                                let _ = img.set_attribute(
+                                    "src",
+                                    &format!("/thumbs/{}", field(clip, "name")),
+                                );
+                                let _ = button.append_child(&img);
+                            } else if let Ok(blank) = document().create_element("div") {
+                                blank.set_class_name("pb-thumb pb-thumb-empty");
+                                let _ = button.append_child(&blank);
+                            }
                             let date = js_sys::Date::new(&JsValue::from_str(field(clip, "start")));
                             let size = clip["size"].as_f64().unwrap_or(0.0);
                             let size = if size >= 1048576.0 {
@@ -556,15 +584,28 @@ async fn load(keep_page: bool) {
                             } else {
                                 format!("{:.0} KB", (size / 1024.0).max(1.0))
                             };
-                            for (tag, label) in [
-                                ("b", locale(date.as_ref(), "toLocaleTimeString")),
-                                ("span", field(clip, "camera").to_owned()),
-                                ("small", size),
-                            ] {
-                                if let Ok(e) = document().create_element(tag) {
-                                    text(&e, &label);
-                                    let _ = button.append_child(&e);
+                            if let Ok(meta) = document().create_element("div") {
+                                meta.set_class_name("pb-meta");
+                                for (tag, label) in [
+                                    ("b", locale(date.as_ref(), "toLocaleTimeString")),
+                                    ("span", field(clip, "camera").to_owned()),
+                                ] {
+                                    if let Ok(e) = document().create_element(tag) {
+                                        text(&e, &label);
+                                        let _ = meta.append_child(&e);
+                                    }
                                 }
+                                if clip["moving"] == true
+                                    && let Ok(tag) = document().create_element("em")
+                                {
+                                    text(&tag, "● gerakan");
+                                    let _ = meta.append_child(&tag);
+                                }
+                                let _ = button.append_child(&meta);
+                            }
+                            if let Ok(e) = document().create_element("small") {
+                                text(&e, &size);
+                                let _ = button.append_child(&e);
                             }
                             let _ = li.append_child(&button);
                         }
@@ -1129,7 +1170,7 @@ pub fn start() -> Result<(), JsValue> {
             disabled_at("#refresh", false);
         })
     })?;
-    for selector in ["#pb-camera", "#pb-date", "#pb-from", "#pb-to"] {
+    for selector in ["#pb-camera", "#pb-date", "#pb-from", "#pb-to", "#pb-motion"] {
         bind(q(selector)?.as_ref(), "change", move |_| {
             spawn_local(load(false))
         })?;

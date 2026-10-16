@@ -75,13 +75,22 @@ fn input<W: AsyncWrite + Unpin + Send + 'static>(
     let count = queued.clone();
     tokio::spawn(async move {
         let mut next: Option<Instant> = None;
-        'outer: loop {
-            let (arrived, data) = tokio::select! {
-                _=cancel.cancelled()=>{receiver.close();while let Some((_,data))=receiver.recv().await{if !matches!(tokio::time::timeout(Duration::from_secs(2),writer.write_all(&data)).await,Ok(Ok(()))){break}count.fetch_sub(data.len(),Ordering::AcqRel);}break},
-                data=receiver.recv()=>match data{Some(data)=>data,None=>break}
+        let mut draining = false;
+        loop {
+            let (arrived, data) = if draining {
+                match receiver.recv().await {
+                    Some(item) => item,
+                    None => break,
+                }
+            } else {
+                tokio::select! {
+                    _=cancel.cancelled()=>{receiver.close();draining=true;continue},
+                    data=receiver.recv()=>match data{Some(data)=>data,None=>break}
+                }
             };
             let slot = match timing {
                 Timing::None => None,
+                Timing::Delay(_) if draining => None,
                 Timing::Delay(delay) => Some(arrived + delay),
                 Timing::Video(pace) => {
                     let base = Duration::from_secs_f64(1.0 / pace.fps);
@@ -94,22 +103,32 @@ fn input<W: AsyncWrite + Unpin + Send + 'static>(
                     // Aim to keep `buffer` worth of frames queued: speed up when deeper, slow down
                     // when shallower, by at most 30%, so a wrong fps estimate self-corrects.
                     let target = (pace.fps * pace.buffer.as_secs_f64()).max(1.0);
-                    let factor = (1.0 - 0.15 * (receiver.len() as f64 - target) / target)
-                        .clamp(0.7, 1.3);
+                    let factor = if draining {
+                        // Shutdown: flush the buffered tail at double speed, still with distinct
+                        // timestamps (identical ones would make the muxer drop frames).
+                        0.5
+                    } else {
+                        (1.0 - 0.15 * (receiver.len() as f64 - target) / target).clamp(0.7, 1.3)
+                    };
                     next = Some(slot + base.mul_f64(factor));
                     Some(slot)
                 }
             };
             if let Some(slot) = slot {
-                tokio::select! {
-                    _=cancel.cancelled()=>{}
-                    _=tokio::time::sleep_until(slot.into())=>{}
+                if draining {
+                    tokio::time::sleep_until(slot.into()).await;
+                } else {
+                    tokio::select! {
+                        _=cancel.cancelled()=>{}
+                        _=tokio::time::sleep_until(slot.into())=>{}
+                    }
                 }
             }
-            let result = writer.write_all(&data).await;
+            let write = tokio::time::timeout(Duration::from_secs(2), writer.write_all(&data));
+            let ok = matches!(write.await, Ok(Ok(())));
             count.fetch_sub(data.len(), Ordering::AcqRel);
-            if result.is_err() {
-                break 'outer;
+            if !ok {
+                break;
             }
         }
         let _ = tokio::time::timeout(Duration::from_millis(200), writer.shutdown()).await;

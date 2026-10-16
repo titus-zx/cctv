@@ -8,3 +8,4 @@ pub mod protocol;
 pub mod recording;
 pub mod server;
 pub mod storage;
+pub mod thumbs;

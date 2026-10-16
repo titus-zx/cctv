@@ -31,6 +31,10 @@ cargo run -- docker down
 
 CLI menyiapkan folder berizin privat, menyalin konfigurasi/rclone jika belum ada, dan membuat overlay `/dev/dri/renderD128` serta grup render jika perangkat tersedia. Konfigurasi yang sudah ada tidak ditimpa.
 
+## Thumbnail dan deteksi gerakan
+
+Setiap segmen yang selesai direkam dianalisis sebelum diunggah: ffmpeg hanya mendekode keyframe, menghitung perubahan adegan antar keyframe, dan menyimpan thumbnail 320 px dari momen paling aktif di `recordings/.thumbs/`. Skor gerakan disimpan di `recordings/.index.json`. Halaman Rekaman menampilkan thumbnail, menandai klip bergerak, dan punya filter "Hanya yang ada gerakan" (ambang `MOTION_THRESHOLD` di `src/storage.rs`). Thumbnail, entri indeks, dan file sementara ikut dihapus oleh aturan retensi; thumbnail yatim (klip sudah tidak ada) dibersihkan setelah lewat 1 jam.
+
 ## Akses dengan PIN
 
 Semua halaman, API, stream, dan rekaman hanya bisa diakses setelah memasukkan PIN 6 digit pada `/login`. PIN dibaca dari environment `ACCESS_PIN`; server menolak start jika kosong atau bukan 6 digit. Sesi berlaku tepat 5 menit sejak login (tidak diperpanjang oleh aktivitas), setelah itu halaman diarahkan kembali ke login. Lima PIN salah berturut-turut mengunci login selama 60 detik. Sesi disimpan di memori, jadi restart server mengeluarkan semua sesi. Layani lewat HTTPS (reverse proxy) bila diakses dari luar jaringan rumah, karena PIN dikirim apa adanya.

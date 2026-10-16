@@ -167,3 +167,86 @@ async fn index_persists_lists_by_day_and_prunes_vanished_clips() {
     assert!(reloaded.day("20200102").is_empty());
     assert_eq!(reloaded.size(&now), Some(5));
 }
+
+fn old(path: &Path) {
+    let file = std::fs::File::options().write(true).open(path).unwrap();
+    file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(7200))
+        .unwrap();
+}
+#[tokio::test]
+async fn thumbnails_and_index_entries_follow_retention() {
+    let dir = tempfile::tempdir().unwrap();
+    let thumbs = dir.path().join(".thumbs");
+    std::fs::create_dir(&thumbs).unwrap();
+    let store = Store::new(&settings(dir.path()));
+    let expired = "cam123_20261001_000000";
+    let fresh = "cam123_20261013_100000";
+    for name in [expired, fresh] {
+        mp4(&dir.path().join(format!("{name}.mp4")));
+        std::fs::write(thumbs.join(format!("{name}.jpg")), b"jpg").unwrap();
+        store.index.add(&format!("{name}.mp4"), 27);
+        store.index.set_motion(&format!("{name}.mp4"), 0.5);
+    }
+    // Orphans: the clip itself is gone. Only the one past the grace period is removed.
+    std::fs::write(thumbs.join("cam123_20261012_100000.jpg"), b"jpg").unwrap();
+    old(&thumbs.join("cam123_20261012_100000.jpg"));
+    std::fs::write(thumbs.join("cam123_20261012_110000.jpg"), b"jpg").unwrap();
+    std::fs::write(thumbs.join(".tmp-cam123_20261012_120000.jpg"), b"x").unwrap();
+    old(&thumbs.join(".tmp-cam123_20261012_120000.jpg"));
+    let stop = CancellationToken::new();
+    let queue = UploadQueue::new(store.clone(), true, stop.clone());
+    let now = Local
+        .with_ymd_and_hms(2026, 10, 14, 12, 0, 0)
+        .single()
+        .unwrap()
+        .with_timezone(&Utc);
+    let mut status = RetentionStatus::default();
+    storage::clean_retention(
+        &store,
+        &queue,
+        &HashSet::from(["123".into()]),
+        7.0,
+        now,
+        &mut status,
+    )
+    .await
+    .unwrap();
+    let left = |name: &str| thumbs.join(name).exists();
+    assert!(!left(&format!("{expired}.jpg")));
+    assert!(left(&format!("{fresh}.jpg")));
+    assert!(!left("cam123_20261012_100000.jpg"));
+    assert!(left("cam123_20261012_110000.jpg"));
+    assert!(!left(".tmp-cam123_20261012_120000.jpg"));
+    assert_eq!(store.index.motion(&format!("{expired}.mp4")), None);
+    assert_eq!(store.index.motion(&format!("{fresh}.mp4")), Some(0.5));
+    stop.cancel();
+}
+#[tokio::test]
+async fn thumbnail_picks_motion_and_scores_still_scenes_low() {
+    if std::process::Command::new("ffmpeg").arg("-version").output().is_err() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let make = |name: &str, source: &str| {
+        let status = std::process::Command::new("ffmpeg")
+            .args(["-v", "error", "-f", "lavfi", "-i", source, "-t", "6", "-g", "10"])
+            .args(["-c:v", "libx264", "-pix_fmt", "yuv420p"])
+            .arg(dir.path().join(name))
+            .status()
+            .unwrap();
+        assert!(status.success());
+    };
+    make("cam1_20260101_100000.mp4", "color=c=gray:size=320x240:rate=10");
+    make("cam1_20260101_110000.mp4", "testsrc=size=320x240:rate=10");
+    let store = Store::new(&settings(dir.path()));
+    for name in ["cam1_20260101_100000.mp4", "cam1_20260101_110000.mp4"] {
+        store.index.add(name, 1);
+        store.ensure_thumb(&dir.path().join(name)).await;
+        let thumb = cctv::thumbs::thumb_path(dir.path(), name).unwrap();
+        assert!(thumb.metadata().unwrap().len() > 100, "{name}");
+    }
+    let still = store.index.motion("cam1_20260101_100000.mp4").unwrap();
+    let moving = store.index.motion("cam1_20260101_110000.mp4").unwrap();
+    assert!(still < storage::MOTION_THRESHOLD, "{still}");
+    assert!(moving >= storage::MOTION_THRESHOLD, "{moving}");
+}

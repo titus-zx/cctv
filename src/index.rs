@@ -10,13 +10,26 @@ use std::{
 /// Clip names and sizes for remote storage, persisted next to the recordings so the playback
 /// page never has to list the remote (slow on Google Drive/OneDrive) while opening.
 /// Grouped by the `YYYYMMDD` in the file name, which is the local recording date.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+struct Meta {
+    size: u64,
+    /// Highest scene-change score between keyframes; `Some` also means a thumbnail exists.
+    motion: Option<f32>,
+}
+/// Older index files stored only the size.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Entry {
+    Size(u64),
+    Full(Meta),
+}
 #[derive(Default, Serialize, Deserialize)]
-struct Data {
-    clips: BTreeMap<String, u64>,
+struct Data<T> {
+    clips: BTreeMap<String, T>,
 }
 #[derive(Default)]
 struct Inner {
-    days: BTreeMap<String, BTreeMap<String, u64>>,
+    days: BTreeMap<String, BTreeMap<String, Meta>>,
     ready: bool,
     dirty: bool,
 }
@@ -34,11 +47,15 @@ impl Index {
         if let Some(data) = path
             .as_deref()
             .and_then(|p| std::fs::read(p).ok())
-            .and_then(|b| serde_json::from_slice::<Data>(&b).ok())
+            .and_then(|b| serde_json::from_slice::<Data<Entry>>(&b).ok())
         {
-            for (name, size) in data.clips {
+            for (name, entry) in data.clips {
+                let meta = match entry {
+                    Entry::Size(size) => Meta { size, motion: None },
+                    Entry::Full(meta) => meta,
+                };
                 if let Some(day) = day_of(&name) {
-                    inner.days.entry(day).or_default().insert(name, size);
+                    inner.days.entry(day).or_default().insert(name, meta);
                 }
             }
             inner.ready = true;
@@ -55,9 +72,28 @@ impl Index {
     pub fn add(&self, name: &str, size: u64) {
         if let Some(day) = day_of(name) {
             let mut inner = self.inner.lock().unwrap();
-            inner.days.entry(day).or_default().insert(name.into(), size);
+            inner
+                .days
+                .entry(day)
+                .or_default()
+                .entry(name.into())
+                .and_modify(|m| m.size = size)
+                .or_insert(Meta { size, motion: None });
             inner.dirty = true;
         }
+    }
+    pub fn set_motion(&self, name: &str, motion: f32) {
+        if let Some(day) = day_of(name) {
+            let mut inner = self.inner.lock().unwrap();
+            if let Some(meta) = inner.days.get_mut(&day).and_then(|b| b.get_mut(name)) {
+                meta.motion = Some(motion);
+                inner.dirty = true;
+            }
+        }
+    }
+    pub fn motion(&self, name: &str) -> Option<f32> {
+        let day = day_of(name)?;
+        self.inner.lock().unwrap().days.get(&day)?.get(name)?.motion
     }
     pub fn remove(&self, name: &str) {
         if let Some(day) = day_of(name) {
@@ -71,7 +107,7 @@ impl Index {
     }
     pub fn size(&self, name: &str) -> Option<u64> {
         let day = day_of(name)?;
-        self.inner.lock().unwrap().days.get(&day)?.get(name).copied()
+        self.inner.lock().unwrap().days.get(&day)?.get(name).map(|m| m.size)
     }
     /// `day` is `YYYYMMDD`.
     pub fn day(&self, day: &str) -> Vec<Clip> {
@@ -82,7 +118,11 @@ impl Index {
             .map(|bucket| {
                 bucket
                     .iter()
-                    .filter_map(|(name, size)| parse_name(name, *size))
+                    .filter_map(|(name, meta)| {
+                        let mut clip = parse_name(name, meta.size)?;
+                        clip.set_motion(meta.motion);
+                        Some(clip)
+                    })
                     .collect()
             })
             .unwrap_or_default()
@@ -92,24 +132,26 @@ impl Index {
     pub fn sync(&self, listing: Vec<(String, u64)>) {
         let recent = Utc::now() - Age::minutes(10);
         let mut inner = self.inner.lock().unwrap();
-        let mut fresh: BTreeMap<String, BTreeMap<String, u64>> = BTreeMap::new();
+        let mut fresh: BTreeMap<String, BTreeMap<String, Meta>> = BTreeMap::new();
         for (name, size) in listing {
             if let Some(day) = day_of(&name) {
-                fresh.entry(day).or_default().insert(name, size);
+                // Keep thumbnail/motion data across syncs.
+                let motion = inner.days.get(&day).and_then(|b| b.get(&name)).and_then(|m| m.motion);
+                fresh.entry(day).or_default().insert(name, Meta { size, motion });
             }
         }
         for (day, bucket) in &inner.days {
-            for (name, size) in bucket {
+            for (name, meta) in bucket {
                 if parse_name(name, 0).is_some_and(|c| c.start > recent) {
                     fresh
                         .entry(day.clone())
                         .or_default()
                         .entry(name.clone())
-                        .or_insert(*size);
+                        .or_insert(*meta);
                 }
             }
         }
-        if fresh != inner.days {
+        if !same(&fresh, &inner.days) {
             inner.days = fresh;
             inner.dirty = true;
         }
@@ -123,10 +165,10 @@ impl Index {
                 return;
             }
             inner.dirty = false;
-            let clips = inner
+            let clips: BTreeMap<String, Meta> = inner
                 .days
                 .values()
-                .flat_map(|b| b.iter().map(|(n, s)| (n.clone(), *s)))
+                .flat_map(|b| b.iter().map(|(n, m)| (n.clone(), *m)))
                 .collect();
             serde_json::to_vec(&Data { clips }).unwrap_or_default()
         };
@@ -137,6 +179,17 @@ impl Index {
             self.inner.lock().unwrap().dirty = true;
         }
     }
+}
+fn same(a: &BTreeMap<String, BTreeMap<String, Meta>>, b: &BTreeMap<String, BTreeMap<String, Meta>>) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|((da, ba), (db, bb))| {
+            da == db
+                && ba.len() == bb.len()
+                && ba
+                    .iter()
+                    .zip(bb)
+                    .all(|((na, ma), (nb, mb))| na == nb && ma.size == mb.size && ma.motion == mb.motion)
+        })
 }
 pub fn index_path(dir: &Path) -> PathBuf {
     dir.join(".index.json")

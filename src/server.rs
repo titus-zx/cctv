@@ -68,6 +68,7 @@ pub fn router_with_auth(app: Arc<App>, public_dir: PathBuf, auth: Option<Arc<Aut
         .route("/audio/{id}", get(audio))
         .route("/snapshot/{id}", get(snapshot))
         .route("/recordings/{name}", get(clip))
+        .route("/thumbs/{name}", get(thumb))
         .fallback_service(ServeDir::new(public_dir))
         .layer(DefaultBodyLimit::max(16384));
     if let Some(auth) = auth {
@@ -108,7 +109,7 @@ async fn guard(
     {
         return next.run(request).await;
     }
-    let api = ["/api/", "/stream/", "/audio/", "/snapshot/", "/recordings/"]
+    let api = ["/api/", "/stream/", "/audio/", "/snapshot/", "/recordings/", "/thumbs/"]
         .iter()
         .any(|p| path.starts_with(p));
     if api {
@@ -171,10 +172,8 @@ async fn headers(request: Request<Body>, next: Next) -> Response {
     }
     let mut response = next.run(request).await;
     let h = response.headers_mut();
-    h.insert(
-        header::CACHE_CONTROL,
-        header::HeaderValue::from_static("no-store"),
-    );
+    h.entry(header::CACHE_CONTROL)
+        .or_insert(header::HeaderValue::from_static("no-store"));
     h.insert(
         "x-content-type-options",
         header::HeaderValue::from_static("nosniff"),
@@ -390,6 +389,8 @@ struct RecordingQuery {
     to: Option<String>,
     page: Option<usize>,
     size: Option<usize>,
+    /// `1` keeps only clips with movement.
+    motion: Option<String>,
 }
 fn minutes(value: Option<&str>, fallback: u32) -> u32 {
     value
@@ -427,7 +428,11 @@ async fn recordings(State(app): State<Arc<App>>, Query(query): Query<RecordingQu
     }
     let from = minutes(query.from.as_deref(), 0);
     let to = minutes(query.to.as_deref(), 1439);
+    let moving_only = query.motion.as_deref() == Some("1");
     clips.retain(|clip| {
+        if moving_only && !clip.moving {
+            return false;
+        }
         let local = clip.start.with_timezone(&Local);
         let minute = local.hour() * 60 + local.minute();
         minute >= from
@@ -451,6 +456,20 @@ async fn recordings(State(app): State<Arc<App>>, Query(query): Query<RecordingQu
         json!({"enabled":true,"items":items,"total":total,"page":page,"pages":pages,"size":size}),
     )
     .into_response())
+}
+async fn thumb(State(app): State<Arc<App>>, Path(name): Path<String>) -> ApiResult {
+    let store = app.store.as_ref().ok_or_else(ApiError::missing)?;
+    let path = crate::thumbs::thumb_path(&store.dir, &name).ok_or_else(ApiError::missing)?;
+    let bytes = tokio::fs::read(path).await.map_err(|_| ApiError::missing())?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/jpeg"),
+            // Thumbnails never change once written; the session cookie still gates access.
+            (header::CACHE_CONTROL, "private, max-age=86400"),
+        ],
+        bytes,
+    )
+        .into_response())
 }
 async fn clip(
     State(app): State<Arc<App>>,
