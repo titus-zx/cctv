@@ -458,7 +458,12 @@ async fn clip(
     headers: HeaderMap,
 ) -> ApiResult {
     let store = app.store.as_ref().ok_or_else(ApiError::missing)?;
-    let size = store.size(&name).await?.ok_or_else(ApiError::missing)?;
+    // A clip still on local disk is read directly, even when the destination is remote.
+    let local = store.local_size(&name).await;
+    let size = match local {
+        Some(size) => size,
+        None => store.size(&name).await?.ok_or_else(ApiError::missing)?,
+    };
     let range = storage::byte_range(
         headers.get(header::RANGE).and_then(|v| v.to_str().ok()),
         size,
@@ -474,7 +479,7 @@ async fn clip(
         ByteRange::Part { start, end } => (start, end - start + 1, StatusCode::PARTIAL_CONTENT),
         _ => (0, size, StatusCode::OK),
     };
-    let body = if store.remote.is_none() {
+    let body = if local.is_some() || store.remote.is_none() {
         let mut file = tokio::fs::File::open(store.dir.join(&name))
             .await
             .map_err(|_| ApiError::missing())?;

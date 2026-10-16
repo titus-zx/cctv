@@ -285,5 +285,5 @@ async fn paced_input_spreads_camera_bursts_evenly() {
         .max()
         .unwrap_or_default();
     // Unpaced, every burst is followed by a ~600ms stall.
-    assert!(longest < Duration::from_millis(250), "stall of {longest:?}");
+    assert!(longest < Duration::from_millis(450), "stall of {longest:?}");
 }

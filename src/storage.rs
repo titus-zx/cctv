@@ -1,4 +1,5 @@
 use crate::{
+    index::{Index, index_path},
     config::{Recording, RetentionSettings},
     recording::finalized_mp4,
 };
@@ -18,6 +19,7 @@ pub struct Store {
     pub dir: PathBuf,
     pub remote: Option<String>,
     pub bin: String,
+    pub index: Arc<Index>,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -107,7 +109,9 @@ pub fn byte_range(header: Option<&str>, size: u64) -> ByteRange {
 }
 impl Store {
     pub fn new(recording: &Recording) -> Self {
+        let remote = recording.destination != "local";
         Self {
+            index: Arc::new(Index::new(remote.then(|| index_path(&recording.dir)))),
             dir: recording.dir.clone(),
             remote: if recording.destination == "local" {
                 None
@@ -175,9 +179,12 @@ impl Store {
             bail!("Tanggal tidak valid.")
         }
         if self.remote.is_some() {
-            return self
-                .remote_list(Some(&date.format("%Y%m%d").to_string()))
-                .await;
+            let day = date.format("%Y%m%d").to_string();
+            // Served from the metadata index; only the very first run (no index yet) lists live.
+            if self.index.ready() {
+                return Ok(self.index.day(&day));
+            }
+            return self.remote_list(Some(&day)).await;
         }
         let mut clips = vec![];
         let mut entries = match tokio::fs::read_dir(&self.dir).await {
@@ -199,9 +206,23 @@ impl Store {
         }
         Ok(clips)
     }
+    /// A clip still on local disk is complete (segments are linked in only once finalized).
+    pub async fn local_size(&self, name: &str) -> Option<u64> {
+        parse_name(name, 0)?;
+        tokio::fs::symlink_metadata(self.dir.join(name))
+            .await
+            .ok()
+            .filter(|m| m.is_file())
+            .map(|m| m.len())
+    }
     pub async fn size(&self, name: &str) -> Result<Option<u64>> {
         if parse_name(name, 0).is_none() {
             return Ok(None);
+        }
+        if self.remote.is_some() {
+            if let Some(size) = self.local_size(name).await.or_else(|| self.index.size(name)) {
+                return Ok(Some(size));
+            }
         }
         if self.remote.is_none() {
             return match tokio::fs::symlink_metadata(self.dir.join(name)).await {
@@ -227,6 +248,32 @@ impl Store {
         let files: Vec<Value> = serde_json::from_str(&text)?;
         Ok(files.first().and_then(|f| f["Size"].as_u64()))
     }
+    /// Rebuild the index from the remote plus clips still waiting locally.
+    pub async fn sync_index(&self) -> Result<()> {
+        let mut listing: Vec<(String, u64)> = if self.remote.is_some() {
+            self.remote_list(None)
+                .await?
+                .into_iter()
+                .map(|c| (c.name, c.size))
+                .collect()
+        } else {
+            vec![]
+        };
+        if let Ok(mut entries) = tokio::fs::read_dir(&self.dir).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if let Ok(meta) = entry.metadata().await
+                    && meta.is_file()
+                    && parse_name(&name, 0).is_some()
+                {
+                    listing.push((name, meta.len()));
+                }
+            }
+        }
+        self.index.sync(listing);
+        self.index.persist().await;
+        Ok(())
+    }
     pub async fn upload(&self, file: &Path) -> Result<()> {
         if self.remote.is_none() {
             return Ok(());
@@ -248,6 +295,7 @@ impl Store {
     pub async fn delete_remote(&self, name: &str) -> Result<()> {
         self.rclone(&["deletefile".into(), "--".into(), self.target(name)?])
             .await?;
+        self.index.remove(name);
         Ok(())
     }
 }
@@ -263,6 +311,7 @@ pub struct UploadQueue {
     pub queued: Arc<Mutex<HashSet<PathBuf>>>,
     pub status: Arc<Mutex<QueueStatus>>,
     sender: tokio::sync::mpsc::UnboundedSender<PathBuf>,
+    index: Arc<Index>,
 }
 impl UploadQueue {
     pub fn new(
@@ -270,6 +319,7 @@ impl UploadQueue {
         keep_local: bool,
         cancel: tokio_util::sync::CancellationToken,
     ) -> Self {
+        let index = store.index.clone();
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<PathBuf>();
         let queued = Arc::new(Mutex::new(HashSet::new()));
         let status = Arc::new(Mutex::new(QueueStatus::default()));
@@ -320,9 +370,16 @@ impl UploadQueue {
             queued,
             status,
             sender,
+            index,
         }
     }
     pub async fn add(&self, file: PathBuf) {
+        if let (Some(name), Ok(meta)) = (
+            file.file_name().map(|n| n.to_string_lossy().into_owned()),
+            tokio::fs::metadata(&file).await,
+        ) {
+            self.index.add(&name, meta.len());
+        }
         let mut queued = self.queued.lock().await;
         if queued.insert(file.clone()) {
             self.status.lock().await.pending = queued.len();

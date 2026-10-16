@@ -136,3 +136,34 @@ async fn retention_preserves_pending_corrupt_other_camera_symlinks_and_active_fi
     }
     stop.cancel();
 }
+
+#[tokio::test]
+async fn index_persists_lists_by_day_and_prunes_vanished_clips() {
+    use cctv::index::Index;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".index.json");
+    let index = Index::new(Some(path.clone()));
+    assert!(!index.ready());
+    index.sync(vec![
+        ("cam1_20200101_100000.mp4".into(), 10),
+        ("cam1_20200101_110000.mp4".into(), 20),
+        ("cam1_20200102_100000.mp4".into(), 30),
+        ("notaclip.mp4".into(), 1),
+    ]);
+    assert!(index.ready());
+    assert_eq!(index.day("20200101").len(), 2);
+    assert_eq!(index.size("cam1_20200102_100000.mp4"), Some(30));
+    assert_eq!(index.size("notaclip.mp4"), None);
+    index.persist().await;
+    // A restart serves the page immediately from disk.
+    let reloaded = Index::new(Some(path));
+    assert!(reloaded.ready());
+    assert_eq!(reloaded.day("20200101").len(), 2);
+    // A later listing drops old clips that vanished (e.g. retention) but keeps brand-new ones.
+    let now = chrono::Local::now().format("cam1_%Y%m%d_%H%M%S.mp4").to_string();
+    reloaded.add(&now, 5);
+    reloaded.sync(vec![("cam1_20200101_100000.mp4".into(), 10)]);
+    assert_eq!(reloaded.day("20200101").len(), 1);
+    assert!(reloaded.day("20200102").is_empty());
+    assert_eq!(reloaded.size(&now), Some(5));
+}

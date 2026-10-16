@@ -49,6 +49,22 @@ async fn main() -> Result<()> {
         let _ = recording::hardware_available().await;
     }
     let mut tasks = vec![];
+    if let Some(store) = store.clone().filter(|s| s.remote.is_some()) {
+        let stop = cancel.clone();
+        tasks.push(tokio::spawn(async move {
+            // Keep the playback index fresh in the background; the page only reads the index.
+            let mut ticks = 0u32;
+            loop {
+                if ticks % 40 == 0 {
+                    tokio::select! {_=stop.cancelled()=>break,_=store.sync_index()=>{}}
+                }
+                tokio::select! {_=stop.cancelled()=>break,_=tokio::time::sleep(Duration::from_secs(15))=>{}}
+                store.index.persist().await;
+                ticks = ticks.wrapping_add(1);
+            }
+            store.index.persist().await;
+        }));
+    }
     let mut cameras = vec![];
     for camera in &cfg.cameras {
         let (handle, task) = camera::spawn(
