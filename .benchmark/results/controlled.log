@@ -1,0 +1,24 @@
+Waiting for camera sources
+Matched cameras: [0, 1, 2, 3]
+Idle complete
+Streaming round 1 complete
+Streaming round 2 complete
+Streaming round 3 complete
+{
+  "node": {
+    "cpu_percent": 37.023438408036625,
+    "memory_mib": 151.47604166666667,
+    "fps_total": 18.42468796800768,
+    "api_p50_ms": 0.9414792293682694,
+    "api_p95_ms": 3.1947294482961297,
+    "api_errors": 0
+  },
+  "rust": {
+    "cpu_percent": 33.77319285333915,
+    "memory_mib": 58.3890625,
+    "fps_total": 18.32476923909996,
+    "api_p50_ms": 0.8390205330215394,
+    "api_p95_ms": 1.822812482714653,
+    "api_errors": 0
+  }
+}

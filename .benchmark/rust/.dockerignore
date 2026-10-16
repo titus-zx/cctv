@@ -1,0 +1,15 @@
+*
+!Dockerfile
+!Cargo.toml
+!Cargo.lock
+!.cargo/
+!.cargo/**
+!src/
+!src/**
+!ui/
+!ui/Cargo.toml
+!ui/src/
+!ui/src/**
+!public/
+!public/**
+public/pkg/

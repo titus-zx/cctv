@@ -1,0 +1,66 @@
+{
+  "port": 3380,
+  "recording": {
+    "enabled": false,
+    "segmentSeconds": 60,
+    "dir": "/app/recordings",
+    "keepLocal": false,
+    "destination": "gdrive",
+    "rclone": {
+      "gdrive": "gdrive:cctv",
+      "onedrive": "onedrive:cctv"
+    },
+    "retentionDays": 0,
+    "retentionCheckSeconds": 3600
+  },
+  "cameras": [
+    {
+      "name": "RuangTamu",
+      "ip": "192.168.18.6",
+      "deviceId": "65986431",
+      "password": "admin123#",
+      "username": "admin",
+      "mode": "cloud",
+      "quality": "hd",
+      "v380Port": 8800,
+      "record": false,
+      "previewFps": 5
+    },
+    {
+      "name": "Teras1",
+      "ip": "192.168.18.9",
+      "deviceId": "77167201",
+      "password": "DarrellElen1424",
+      "username": "admin",
+      "mode": "cloud",
+      "quality": "hd",
+      "v380Port": 8800,
+      "record": false,
+      "previewFps": 5
+    },
+    {
+      "name": "Teras2",
+      "ip": "192.168.0.4",
+      "deviceId": "77166157",
+      "password": "DarrellElen1424",
+      "username": "admin",
+      "mode": "cloud",
+      "quality": "hd",
+      "v380Port": 8800,
+      "record": false,
+      "previewFps": 5
+    },
+    {
+      "name": "Kitchen",
+      "ip": "192.168.18.5",
+      "deviceId": "72542272",
+      "password": "DarrellElen1424#",
+      "username": "72542272",
+      "mode": "cloud",
+      "quality": "hd",
+      "v380Port": 8800,
+      "record": false,
+      "previewFps": 5
+    }
+  ]
+}

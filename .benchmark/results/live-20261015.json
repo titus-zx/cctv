@@ -1,0 +1,841 @@
+{
+  "label": "live-20261015",
+  "arch": "aarch64",
+  "cpus_per_container": 2,
+  "memory_limit_mib": 1024,
+  "preview_fps": 5,
+  "recording": false,
+  "results": {
+    "node": {
+      "cpu_percent": 17.637708978548694,
+      "memory_mib": 130.45477430555556,
+      "fps_total": 13.343325566506378,
+      "api_p50_ms": 0.839041720610112,
+      "api_p95_ms": 1.9773340318351984,
+      "api_errors": 0
+    },
+    "rust": {
+      "cpu_percent": 15.99903538129592,
+      "memory_mib": 71.97942708333333,
+      "fps_total": 13.62727441443147,
+      "api_p50_ms": 0.7435105508193374,
+      "api_p95_ms": 4.121437552385032,
+      "api_errors": 0
+    }
+  },
+  "initial_cameras": {
+    "node": [
+      {
+        "id": 0,
+        "name": "RuangTamu",
+        "ip": "192.168.18.6",
+        "deviceId": "65986431",
+        "username": "admin",
+        "mode": "cloud",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 640,
+        "height": 360,
+        "deviceVersion": 31,
+        "communicationVersion": null,
+        "transport": "cloud",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 4,
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "streamStats": {
+          "packets": 143878,
+          "bytes": 67956043,
+          "videoPackets": 125357,
+          "audioPackets": 18159,
+          "frames": 16276,
+          "incompleteFrames": 0,
+          "ignoredPackets": 362,
+          "lastPacketAt": 1792040455226
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 75925,
+        "lastFrameAt": 1792040455141,
+        "viewers": 1,
+        "audio": true,
+        "hasPassword": true
+      },
+      {
+        "id": 1,
+        "name": "Teras1",
+        "ip": "192.168.18.9",
+        "deviceId": "77167201",
+        "username": "admin",
+        "mode": "cloud",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 640,
+        "height": 360,
+        "deviceVersion": 31,
+        "communicationVersion": null,
+        "transport": "cloud",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "streamStats": {
+          "packets": 134276,
+          "bytes": 61418305,
+          "videoPackets": 114587,
+          "audioPackets": 19308,
+          "frames": 21519,
+          "incompleteFrames": 0,
+          "ignoredPackets": 381,
+          "lastPacketAt": 1792040455226
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 93202,
+        "lastFrameAt": 1792040455204,
+        "viewers": 1,
+        "audio": true,
+        "hasPassword": true
+      },
+      {
+        "id": 2,
+        "name": "Teras2",
+        "ip": "192.168.0.4",
+        "deviceId": "77166157",
+        "username": "admin",
+        "mode": "cloud",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 640,
+        "height": 360,
+        "deviceVersion": 31,
+        "communicationVersion": null,
+        "transport": "cloud",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 9,
+        "lastConnectionError": "Kamera tidak mengirim data selama 8 detik.",
+        "streamStats": {
+          "packets": 203065,
+          "bytes": 95113657,
+          "videoPackets": 176965,
+          "audioPackets": 25606,
+          "frames": 24954,
+          "incompleteFrames": 0,
+          "ignoredPackets": 494,
+          "lastPacketAt": 1792040455226
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 81188,
+        "lastFrameAt": 1792040455204,
+        "viewers": 1,
+        "audio": true,
+        "hasPassword": true
+      },
+      {
+        "id": 3,
+        "name": "Kitchen",
+        "ip": "192.168.18.5",
+        "deviceId": "72542272",
+        "username": "72542272",
+        "mode": "cloud",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "error",
+        "message": "Login kamera gagal (1002).",
+        "recording": null,
+        "reconnects": 0,
+        "lastConnectionError": "Login kamera gagal (1002).",
+        "streamStats": {
+          "packets": 0,
+          "bytes": 0,
+          "videoPackets": 0,
+          "audioPackets": 0,
+          "frames": 0,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": null
+        },
+        "previewError": null,
+        "previewActive": false,
+        "frames": 0,
+        "lastFrameAt": null,
+        "viewers": 1,
+        "audio": false,
+        "hasPassword": true
+      }
+    ],
+    "rust": [
+      {
+        "audio": true,
+        "codec": "h264",
+        "communicationVersion": null,
+        "deviceId": "65986431",
+        "deviceVersion": 31,
+        "frames": 75826,
+        "hasPassword": true,
+        "height": 360,
+        "id": 0,
+        "ip": "192.168.18.6",
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "lastFrameAt": 1792040455226,
+        "message": "Video langsung",
+        "mode": "cloud",
+        "name": "RuangTamu",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 6,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 6449,
+          "bytes": 24226264,
+          "frames": 5781,
+          "ignoredPackets": 128,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792040455096,
+          "packets": 51296,
+          "videoPackets": 44719
+        },
+        "transport": "cloud",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 1,
+        "width": 640
+      },
+      {
+        "audio": true,
+        "codec": "h264",
+        "communicationVersion": null,
+        "deviceId": "77167201",
+        "deviceVersion": 31,
+        "frames": 93093,
+        "hasPassword": true,
+        "height": 360,
+        "id": 1,
+        "ip": "192.168.18.9",
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "lastFrameAt": 1792040455240,
+        "message": "Video langsung",
+        "mode": "cloud",
+        "name": "Teras1",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 2,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 17092,
+          "bytes": 54179880,
+          "frames": 19056,
+          "ignoredPackets": 337,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792040455226,
+          "packets": 118496,
+          "videoPackets": 101067
+        },
+        "transport": "cloud",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 1,
+        "width": 640
+      },
+      {
+        "audio": true,
+        "codec": "h264",
+        "communicationVersion": null,
+        "deviceId": "77166157",
+        "deviceVersion": 31,
+        "frames": 82273,
+        "hasPassword": true,
+        "height": 360,
+        "id": 2,
+        "ip": "192.168.0.4",
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "lastFrameAt": 1792040455226,
+        "message": "Video langsung",
+        "mode": "cloud",
+        "name": "Teras2",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 5,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 19333,
+          "bytes": 71671936,
+          "frames": 18752,
+          "ignoredPackets": 372,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792040455165,
+          "packets": 152976,
+          "videoPackets": 133271
+        },
+        "transport": "cloud",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 1,
+        "width": 640
+      },
+      {
+        "audio": false,
+        "deviceId": "72542272",
+        "frames": 0,
+        "hasPassword": true,
+        "id": 3,
+        "ip": "192.168.18.5",
+        "lastConnectionError": "AUTH_1002: Login kamera ditolak.",
+        "lastFrameAt": null,
+        "message": "AUTH_1002: Login kamera ditolak.",
+        "mode": "cloud",
+        "name": "Kitchen",
+        "previewActive": false,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 5,
+        "recording": null,
+        "state": "error",
+        "streamStats": null,
+        "username": "72542272",
+        "v380Port": 8800,
+        "viewers": 1
+      }
+    ]
+  },
+  "camera_ids_tested": [
+    0,
+    1,
+    2
+  ],
+  "idle": {
+    "node": {
+      "cpu_percent_one_core": 19.218010207839885,
+      "memory_mean_mib": 129.97083333333333,
+      "memory_peak_mib": 130.2109375,
+      "duration_seconds": 30.031235999893397,
+      "streams": []
+    },
+    "rust": {
+      "cpu_percent_one_core": 15.464873961097242,
+      "memory_mean_mib": 71.85546875,
+      "memory_peak_mib": 72.15625,
+      "duration_seconds": 30.034612708026543,
+      "streams": []
+    }
+  },
+  "streaming_rounds": [
+    {
+      "node": {
+        "cpu_percent_one_core": 20.99303135778947,
+        "memory_mean_mib": 130.23541666666668,
+        "memory_peak_mib": 130.5390625,
+        "duration_seconds": 30.024482375010848,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 5.029229084251463,
+            "mib_per_second": 0.14863450717286725,
+            "first_frame_ms": 8.81670811213553,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.496330638238063,
+            "mib_per_second": 0.1984227232962744,
+            "first_frame_ms": 8.927749935537577,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.096656803728013,
+            "mib_per_second": 0.17637348826458904,
+            "first_frame_ms": 8.68854089640081,
+            "error": null
+          }
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 18.741944421785117,
+        "memory_mean_mib": 71.92395833333333,
+        "memory_peak_mib": 72.17578125,
+        "duration_seconds": 30.024227333953604,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.995965369285923,
+            "mib_per_second": 0.14765361080180758,
+            "first_frame_ms": 70.59633312746882,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.52967526815257,
+            "mib_per_second": 0.1999326347089082,
+            "first_frame_ms": 183.7723331991583,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.163304474404935,
+            "mib_per_second": 0.1792694029511526,
+            "first_frame_ms": 191.35445798747241,
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "node": {
+        "cpu_percent_one_core": 17.29705656776904,
+        "memory_mean_mib": 130.54296875,
+        "memory_peak_mib": 131.03515625,
+        "duration_seconds": 30.01531491591595,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.997448816386092,
+            "mib_per_second": 0.14816171940764053,
+            "first_frame_ms": 8.81670811213553,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 5.06408146727124,
+            "mib_per_second": 0.22315373124990062,
+            "first_frame_ms": 8.927749935537577,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 3.6981121241257084,
+            "mib_per_second": 0.15806232135688716,
+            "first_frame_ms": 8.68854089640081,
+            "error": null
+          }
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 15.074674980335148,
+        "memory_mean_mib": 71.98333333333333,
+        "memory_peak_mib": 72.3359375,
+        "duration_seconds": 30.01616954198107,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 5.030621904930578,
+            "mib_per_second": 0.14914815247921803,
+            "first_frame_ms": 70.59633312746882,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.6641527595382835,
+            "mib_per_second": 0.20553795831112923,
+            "first_frame_ms": 183.7723331991583,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 3.6313760770690924,
+            "mib_per_second": 0.15522350268355387,
+            "first_frame_ms": 191.35445798747241,
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "node": {
+        "cpu_percent_one_core": 14.623039010087572,
+        "memory_mean_mib": 130.5859375,
+        "memory_peak_mib": 130.9609375,
+        "duration_seconds": 30.360248625045642,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.841857582112571,
+            "mib_per_second": 0.14366822580007818,
+            "first_frame_ms": 8.81670811213553,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.512479515302192,
+            "mib_per_second": 0.19913216308786838,
+            "first_frame_ms": 8.927749935537577,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 3.2937806681037896,
+            "mib_per_second": 0.14050102268648823,
+            "first_frame_ms": 8.68854089640081,
+            "error": null
+          }
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 14.180486741767497,
+        "memory_mean_mib": 72.03098958333334,
+        "memory_peak_mib": 72.42578125,
+        "duration_seconds": 30.432559041073546,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.928931536698945,
+            "mib_per_second": 0.1462458646355485,
+            "first_frame_ms": 70.59633312746882,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.6989147316529944,
+            "mib_per_second": 0.2072894888944727,
+            "first_frame_ms": 183.7723331991583,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.238881121561093,
+            "mib_per_second": 0.18080871596771306,
+            "first_frame_ms": 191.35445798747241,
+            "error": null
+          }
+        ]
+      }
+    }
+  ],
+  "api_latency": {
+    "node": [
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.9121039183810353,
+        "p95_ms": 2.394834067672491
+      },
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7659795228391886,
+        "p95_ms": 1.5598339959979057
+      }
+    ],
+    "rust": [
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7055834867060184,
+        "p95_ms": 1.6107920091599226
+      },
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.7814376149326563,
+        "p95_ms": 6.632083095610142
+      }
+    ]
+  },
+  "final_cameras": {
+    "node": [
+      {
+        "id": 0,
+        "name": "RuangTamu",
+        "ip": "192.168.18.6",
+        "deviceId": "65986431",
+        "username": "admin",
+        "mode": "cloud",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 640,
+        "height": 360,
+        "deviceVersion": 31,
+        "communicationVersion": null,
+        "transport": "cloud",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 4,
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "streamStats": {
+          "packets": 164036,
+          "bytes": 77470952,
+          "videoPackets": 142964,
+          "audioPackets": 20660,
+          "frames": 18519,
+          "incompleteFrames": 0,
+          "ignoredPackets": 412,
+          "lastPacketAt": 1792040605000
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 78168,
+        "lastFrameAt": 1792040605000,
+        "viewers": 2,
+        "audio": true,
+        "hasPassword": true
+      },
+      {
+        "id": 1,
+        "name": "Teras1",
+        "ip": "192.168.18.9",
+        "deviceId": "77167201",
+        "username": "admin",
+        "mode": "cloud",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 640,
+        "height": 360,
+        "deviceVersion": 31,
+        "communicationVersion": null,
+        "transport": "cloud",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "streamStats": {
+          "packets": 153940,
+          "bytes": 70527741,
+          "videoPackets": 131701,
+          "audioPackets": 21809,
+          "frames": 24303,
+          "incompleteFrames": 0,
+          "ignoredPackets": 430,
+          "lastPacketAt": 1792040604995
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 95986,
+        "lastFrameAt": 1792040604995,
+        "viewers": 2,
+        "audio": true,
+        "hasPassword": true
+      },
+      {
+        "id": 2,
+        "name": "Teras2",
+        "ip": "192.168.0.4",
+        "deviceId": "77166157",
+        "username": "admin",
+        "mode": "cloud",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 640,
+        "height": 360,
+        "deviceVersion": 31,
+        "communicationVersion": null,
+        "transport": "cloud",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 9,
+        "lastConnectionError": "Kamera tidak mengirim data selama 8 detik.",
+        "streamStats": {
+          "packets": 221941,
+          "bytes": 103976624,
+          "videoPackets": 193365,
+          "audioPackets": 28037,
+          "frames": 27252,
+          "incompleteFrames": 0,
+          "ignoredPackets": 539,
+          "lastPacketAt": 1792040604995
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 83486,
+        "lastFrameAt": 1792040604002,
+        "viewers": 2,
+        "audio": true,
+        "hasPassword": true
+      },
+      {
+        "id": 3,
+        "name": "Kitchen",
+        "ip": "192.168.18.5",
+        "deviceId": "72542272",
+        "username": "72542272",
+        "mode": "cloud",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "error",
+        "message": "Login kamera gagal (1002).",
+        "recording": null,
+        "reconnects": 0,
+        "lastConnectionError": "Login kamera gagal (1002).",
+        "streamStats": {
+          "packets": 0,
+          "bytes": 0,
+          "videoPackets": 0,
+          "audioPackets": 0,
+          "frames": 0,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": null
+        },
+        "previewError": null,
+        "previewActive": false,
+        "frames": 0,
+        "lastFrameAt": null,
+        "viewers": 1,
+        "audio": false,
+        "hasPassword": true
+      }
+    ],
+    "rust": [
+      {
+        "audio": true,
+        "codec": "h264",
+        "communicationVersion": null,
+        "deviceId": "65986431",
+        "deviceVersion": 31,
+        "frames": 78066,
+        "hasPassword": true,
+        "height": 360,
+        "id": 0,
+        "ip": "192.168.18.6",
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "lastFrameAt": 1792040604981,
+        "message": "Video langsung",
+        "mode": "cloud",
+        "name": "RuangTamu",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 6,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 8948,
+          "bytes": 33735028,
+          "frames": 8021,
+          "ignoredPackets": 178,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792040604888,
+          "packets": 71440,
+          "videoPackets": 62314
+        },
+        "transport": "cloud",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 2,
+        "width": 640
+      },
+      {
+        "audio": true,
+        "codec": "h264",
+        "communicationVersion": null,
+        "deviceId": "77167201",
+        "deviceVersion": 31,
+        "frames": 95876,
+        "hasPassword": true,
+        "height": 360,
+        "id": 1,
+        "ip": "192.168.18.9",
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "lastFrameAt": 1792040605007,
+        "message": "Video langsung",
+        "mode": "cloud",
+        "name": "Teras1",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 2,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 19593,
+          "bytes": 63289316,
+          "frames": 21840,
+          "ignoredPackets": 386,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792040605007,
+          "packets": 138160,
+          "videoPackets": 118181
+        },
+        "transport": "cloud",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 2,
+        "width": 640
+      },
+      {
+        "audio": true,
+        "codec": "h264",
+        "communicationVersion": null,
+        "deviceId": "77166157",
+        "deviceVersion": 31,
+        "frames": 84627,
+        "hasPassword": true,
+        "height": 360,
+        "id": 2,
+        "ip": "192.168.0.4",
+        "lastConnectionError": "Koneksi kamera terputus.",
+        "lastFrameAt": 1792040604962,
+        "message": "Video langsung",
+        "mode": "cloud",
+        "name": "Teras2",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 5,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 21832,
+          "bytes": 80712829,
+          "frames": 21105,
+          "ignoredPackets": 419,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792040604841,
+          "packets": 172240,
+          "videoPackets": 149989
+        },
+        "transport": "cloud",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 2,
+        "width": 640
+      },
+      {
+        "audio": false,
+        "deviceId": "72542272",
+        "frames": 0,
+        "hasPassword": true,
+        "id": 3,
+        "ip": "192.168.18.5",
+        "lastConnectionError": "AUTH_1002: Login kamera ditolak.",
+        "lastFrameAt": null,
+        "message": "AUTH_1002: Login kamera ditolak.",
+        "mode": "cloud",
+        "name": "Kitchen",
+        "previewActive": false,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 5,
+        "recording": null,
+        "state": "error",
+        "streamStats": null,
+        "username": "72542272",
+        "v380Port": 8800,
+        "viewers": 1
+      }
+    ]
+  }
+}

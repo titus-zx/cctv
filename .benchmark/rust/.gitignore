@@ -1,0 +1,13 @@
+/target/
+/public/pkg/
+config.json
+config.json.tmp
+*.pcap
+*.pcapng
+*.h264
+*.hevc
+*.jpg
+*.bin
+.DS_Store
+recordings/
+docker-data/

@@ -1,0 +1,62 @@
+{
+  "port": 3380,
+  "recording": {
+    "enabled": false,
+    "retentionDays": 0,
+    "destination": "local"
+  },
+  "cameras": [
+    {
+      "name": "Replay 1",
+      "ip": "172.29.199.10",
+      "deviceId": "90000001",
+      "username": "admin",
+      "password": "benchmark-only",
+      "mode": "v380",
+      "quality": "hd",
+      "audio": false,
+      "record": false,
+      "previewFps": 5,
+      "recordingEncoder": "cpu"
+    },
+    {
+      "name": "Replay 2",
+      "ip": "172.29.199.10",
+      "deviceId": "90000002",
+      "username": "admin",
+      "password": "benchmark-only",
+      "mode": "v380",
+      "quality": "hd",
+      "audio": false,
+      "record": false,
+      "previewFps": 5,
+      "recordingEncoder": "cpu"
+    },
+    {
+      "name": "Replay 3",
+      "ip": "172.29.199.10",
+      "deviceId": "90000003",
+      "username": "admin",
+      "password": "benchmark-only",
+      "mode": "v380",
+      "quality": "hd",
+      "audio": false,
+      "record": false,
+      "previewFps": 5,
+      "recordingEncoder": "cpu"
+    },
+    {
+      "name": "Replay 4",
+      "ip": "172.29.199.10",
+      "deviceId": "90000004",
+      "username": "admin",
+      "password": "benchmark-only",
+      "mode": "v380",
+      "quality": "hd",
+      "audio": false,
+      "record": false,
+      "previewFps": 5,
+      "recordingEncoder": "cpu"
+    }
+  ]
+}

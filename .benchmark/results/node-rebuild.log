@@ -1,0 +1,61 @@
+ Image v380-benchmark:node Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 528B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile.node
+#2 transferring dockerfile: 556B done
+#2 DONE 0.0s
+
+#3 [auth] library/node:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#4 [internal] load metadata for docker.io/library/node:22-bookworm-slim
+#4 DONE 1.5s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 156B done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 15.04kB done
+#6 DONE 0.0s
+
+#7 [1/8] FROM docker.io/library/node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
+#7 resolve docker.io/library/node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 0.0s done
+#7 DONE 0.0s
+
+#8 [2/8] RUN apt-get update     && apt-get install -y --no-install-recommends ffmpeg rclone python3 ca-certificates tzdata     && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [3/8] WORKDIR /app
+#9 CACHED
+
+#10 [4/8] COPY package.json server.js ./
+#10 CACHED
+
+#11 [5/8] COPY lib ./lib
+#11 DONE 0.0s
+
+#12 [6/8] COPY public ./public
+#12 DONE 0.0s
+
+#13 [7/8] COPY test ./test
+#13 DONE 0.0s
+
+#14 [8/8] COPY tools/discover.py ./tools/discover.py
+#14 DONE 0.0s
+
+#15 exporting to image
+#15 exporting layers 0.0s done
+#15 exporting manifest sha256:28bd4c9799ce2f935409c21781a0c73bca41fac3176315dd82654edf9232a4f6 done
+#15 exporting config sha256:fcc4f3802d1f6218c128073833ee2cb5fe6268d428bc24b29bf2a66b00270cda done
+#15 exporting attestation manifest sha256:28208ea43d98f0aff379e91008acada759b850b6ebaaf872f13140ca5b63ebd0 done
+#15 exporting manifest list sha256:835ba74994964296ca4893fef9c3560418887adbbca1ef85523e9dcaa96d3858 done
+#15 naming to docker.io/library/v380-benchmark:node done
+#15 unpacking to docker.io/library/v380-benchmark:node 0.0s done
+#15 DONE 0.1s
+
+#16 resolving provenance for metadata file
+#16 DONE 0.0s
+ Image v380-benchmark:node Built 

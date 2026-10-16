@@ -1,0 +1,926 @@
+{
+  "label": "controlled",
+  "arch": "aarch64",
+  "cpus_per_container": 2,
+  "memory_limit_mib": 1024,
+  "preview_fps": 5,
+  "recording": false,
+  "results": {
+    "node": {
+      "cpu_percent": 37.023438408036625,
+      "memory_mib": 151.47604166666667,
+      "fps_total": 18.42468796800768,
+      "api_p50_ms": 0.9414792293682694,
+      "api_p95_ms": 3.1947294482961297,
+      "api_errors": 0
+    },
+    "rust": {
+      "cpu_percent": 33.77319285333915,
+      "memory_mib": 58.3890625,
+      "fps_total": 18.32476923909996,
+      "api_p50_ms": 0.8390205330215394,
+      "api_p95_ms": 1.822812482714653,
+      "api_errors": 0
+    }
+  },
+  "initial_cameras": {
+    "node": [
+      {
+        "id": 0,
+        "name": "Replay 1",
+        "ip": "172.29.199.10",
+        "deviceId": "90000001",
+        "username": "admin",
+        "mode": "v380",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 1280,
+        "height": 720,
+        "deviceVersion": 31,
+        "communicationVersion": 20,
+        "transport": "lan",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "connect ECONNREFUSED 172.29.199.10:8800",
+        "streamStats": {
+          "packets": 1493,
+          "bytes": 733543,
+          "videoPackets": 1493,
+          "audioPackets": 0,
+          "frames": 49,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": 1792035241390
+        },
+        "previewError": null,
+        "previewActive": false,
+        "frames": 49,
+        "lastFrameAt": 1792035241392,
+        "viewers": 0,
+        "audio": false,
+        "hasPassword": true
+      },
+      {
+        "id": 1,
+        "name": "Replay 2",
+        "ip": "172.29.199.10",
+        "deviceId": "90000002",
+        "username": "admin",
+        "mode": "v380",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 1280,
+        "height": 720,
+        "deviceVersion": 31,
+        "communicationVersion": 20,
+        "transport": "lan",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "connect ECONNREFUSED 172.29.199.10:8800",
+        "streamStats": {
+          "packets": 1493,
+          "bytes": 733543,
+          "videoPackets": 1493,
+          "audioPackets": 0,
+          "frames": 49,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": 1792035241392
+        },
+        "previewError": null,
+        "previewActive": false,
+        "frames": 49,
+        "lastFrameAt": 1792035241393,
+        "viewers": 0,
+        "audio": false,
+        "hasPassword": true
+      },
+      {
+        "id": 2,
+        "name": "Replay 3",
+        "ip": "172.29.199.10",
+        "deviceId": "90000003",
+        "username": "admin",
+        "mode": "v380",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 1280,
+        "height": 720,
+        "deviceVersion": 31,
+        "communicationVersion": 20,
+        "transport": "lan",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "connect ECONNREFUSED 172.29.199.10:8800",
+        "streamStats": {
+          "packets": 1493,
+          "bytes": 733543,
+          "videoPackets": 1493,
+          "audioPackets": 0,
+          "frames": 49,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": 1792035241393
+        },
+        "previewError": null,
+        "previewActive": false,
+        "frames": 49,
+        "lastFrameAt": 1792035241394,
+        "viewers": 0,
+        "audio": false,
+        "hasPassword": true
+      },
+      {
+        "id": 3,
+        "name": "Replay 4",
+        "ip": "172.29.199.10",
+        "deviceId": "90000004",
+        "username": "admin",
+        "mode": "v380",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 640,
+        "height": 480,
+        "deviceVersion": 31,
+        "communicationVersion": 20,
+        "transport": "lan",
+        "codec": "mjpeg",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "connect ECONNREFUSED 172.29.199.10:8800",
+        "streamStats": {
+          "packets": 1960,
+          "bytes": 972405,
+          "videoPackets": 1960,
+          "audioPackets": 0,
+          "frames": 49,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": 1792035241394
+        },
+        "previewError": null,
+        "previewActive": false,
+        "frames": 49,
+        "lastFrameAt": 1792035241396,
+        "viewers": 0,
+        "audio": false,
+        "hasPassword": true
+      }
+    ],
+    "rust": [
+      {
+        "audio": false,
+        "codec": "h264",
+        "communicationVersion": 20,
+        "deviceId": "90000001",
+        "deviceVersion": 31,
+        "frames": 49,
+        "hasPassword": true,
+        "height": 720,
+        "id": 0,
+        "ip": "172.29.199.10",
+        "lastConnectionError": "Koneksi kamera gagal.",
+        "lastFrameAt": 1792035241391,
+        "message": "Video langsung",
+        "mode": "v380",
+        "name": "Replay 1",
+        "previewActive": false,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 1,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 0,
+          "bytes": 731117,
+          "frames": 48,
+          "ignoredPackets": 0,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792035241390,
+          "packets": 1488,
+          "videoPackets": 1488
+        },
+        "transport": "lan",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 0,
+        "width": 1280
+      },
+      {
+        "audio": false,
+        "codec": "h264",
+        "communicationVersion": 20,
+        "deviceId": "90000002",
+        "deviceVersion": 31,
+        "frames": 49,
+        "hasPassword": true,
+        "height": 720,
+        "id": 1,
+        "ip": "172.29.199.10",
+        "lastConnectionError": "Koneksi kamera gagal.",
+        "lastFrameAt": 1792035241391,
+        "message": "Video langsung",
+        "mode": "v380",
+        "name": "Replay 2",
+        "previewActive": false,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 1,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 0,
+          "bytes": 731117,
+          "frames": 48,
+          "ignoredPackets": 0,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792035241390,
+          "packets": 1488,
+          "videoPackets": 1488
+        },
+        "transport": "lan",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 0,
+        "width": 1280
+      },
+      {
+        "audio": false,
+        "codec": "h264",
+        "communicationVersion": 20,
+        "deviceId": "90000003",
+        "deviceVersion": 31,
+        "frames": 49,
+        "hasPassword": true,
+        "height": 720,
+        "id": 2,
+        "ip": "172.29.199.10",
+        "lastConnectionError": "Koneksi kamera gagal.",
+        "lastFrameAt": 1792035241392,
+        "message": "Video langsung",
+        "mode": "v380",
+        "name": "Replay 3",
+        "previewActive": false,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 1,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 0,
+          "bytes": 731117,
+          "frames": 48,
+          "ignoredPackets": 0,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792035241391,
+          "packets": 1488,
+          "videoPackets": 1488
+        },
+        "transport": "lan",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 0,
+        "width": 1280
+      },
+      {
+        "audio": false,
+        "codec": "mjpeg",
+        "communicationVersion": 20,
+        "deviceId": "90000004",
+        "deviceVersion": 31,
+        "frames": 49,
+        "hasPassword": true,
+        "height": 480,
+        "id": 3,
+        "ip": "172.29.199.10",
+        "lastConnectionError": "Koneksi kamera gagal.",
+        "lastFrameAt": 1792035241390,
+        "message": "Video langsung",
+        "mode": "v380",
+        "name": "Replay 4",
+        "previewActive": false,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 1,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 0,
+          "bytes": 968560,
+          "frames": 48,
+          "ignoredPackets": 0,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792035241389,
+          "packets": 1952,
+          "videoPackets": 1952
+        },
+        "transport": "lan",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 0,
+        "width": 640
+      }
+    ]
+  },
+  "camera_ids_tested": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "idle": {
+    "node": {
+      "cpu_percent_one_core": 9.224316613778957,
+      "memory_mean_mib": 20.343359375,
+      "memory_peak_mib": 20.42578125,
+      "duration_seconds": 20.03170616715215,
+      "streams": []
+    },
+    "rust": {
+      "cpu_percent_one_core": 6.322169046613409,
+      "memory_mean_mib": 1.349609375,
+      "memory_peak_mib": 1.53515625,
+      "duration_seconds": 20.029265125049278,
+      "streams": []
+    }
+  },
+  "streaming_rounds": [
+    {
+      "node": {
+        "cpu_percent_one_core": 38.79757861493186,
+        "memory_mean_mib": 146.58125,
+        "memory_peak_mib": 150.69140625,
+        "duration_seconds": 20.041031625121832,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.840070202693986,
+            "mib_per_second": 0.07194455154841106,
+            "first_frame_ms": 2321.106875082478,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.840070202693986,
+            "mib_per_second": 0.07194455154841106,
+            "first_frame_ms": 2320.11766708456,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.840070202693986,
+            "mib_per_second": 0.07194455154841106,
+            "first_frame_ms": 2320.21995796822,
+            "error": null
+          },
+          {
+            "camera": 3,
+            "fps": 3.9918104764486477,
+            "mib_per_second": 0.07572279185012823,
+            "first_frame_ms": 77.23129214718938,
+            "error": null
+          }
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 34.73592920878363,
+        "memory_mean_mib": 58.28125,
+        "memory_peak_mib": 58.9453125,
+        "duration_seconds": 20.04117108299397,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.840036522731439,
+            "mib_per_second": 0.07194405091728381,
+            "first_frame_ms": 2215.9059590194374,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.840036522731439,
+            "mib_per_second": 0.07194405091728381,
+            "first_frame_ms": 2218.0588338524103,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.840036522731439,
+            "mib_per_second": 0.07194405091728381,
+            "first_frame_ms": 2218.149834079668,
+            "error": null
+          },
+          {
+            "camera": 3,
+            "fps": 3.891988131680951,
+            "mib_per_second": 0.0738292083046587,
+            "first_frame_ms": 75.65125008113682,
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "node": {
+        "cpu_percent_one_core": 36.37091365086054,
+        "memory_mean_mib": 151.20234375,
+        "memory_peak_mib": 151.85546875,
+        "duration_seconds": 20.027651958167553,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.7434417273892,
+            "mib_per_second": 0.07108073241192804,
+            "first_frame_ms": 2321.106875082478,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.7434417273892,
+            "mib_per_second": 0.07108073241192804,
+            "first_frame_ms": 2320.11766708456,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.7434417273892,
+            "mib_per_second": 0.07108073241192804,
+            "first_frame_ms": 2320.21995796822,
+            "error": null
+          },
+          {
+            "camera": 3,
+            "fps": 4.094339175220152,
+            "mib_per_second": 0.07766771367483524,
+            "first_frame_ms": 77.23129214718938,
+            "error": null
+          }
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 33.231394565881764,
+        "memory_mean_mib": 58.410546875,
+        "memory_peak_mib": 58.7734375,
+        "duration_seconds": 20.027913624886423,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.743379753842869,
+            "mib_per_second": 0.0710798037349638,
+            "first_frame_ms": 2215.9059590194374,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.743379753842869,
+            "mib_per_second": 0.0710798037349638,
+            "first_frame_ms": 2218.0588338524103,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.743379753842869,
+            "mib_per_second": 0.0710798037349638,
+            "first_frame_ms": 2218.149834079668,
+            "error": null
+          },
+          {
+            "camera": 3,
+            "fps": 3.944494742669333,
+            "mib_per_second": 0.07482523434299058,
+            "first_frame_ms": 75.65125008113682,
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "node": {
+        "cpu_percent_one_core": 35.90182295831749,
+        "memory_mean_mib": 156.64453125,
+        "memory_peak_mib": 157.5,
+        "duration_seconds": 20.01369125000201,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.796716347864632,
+            "mib_per_second": 0.07147802538246946,
+            "first_frame_ms": 2321.106875082478,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.796716347864632,
+            "mib_per_second": 0.07147802538246946,
+            "first_frame_ms": 2320.11766708456,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.796716347864632,
+            "mib_per_second": 0.07147802538246946,
+            "first_frame_ms": 2320.21995796822,
+            "error": null
+          },
+          {
+            "camera": 3,
+            "fps": 4.047229418510784,
+            "mib_per_second": 0.07677406345710563,
+            "first_frame_ms": 77.23129214718938,
+            "error": null
+          }
+        ]
+      },
+      "rust": {
+        "cpu_percent_one_core": 33.352254785352045,
+        "memory_mean_mib": 58.475390625,
+        "memory_peak_mib": 58.70703125,
+        "duration_seconds": 20.01351345796138,
+        "streams": [
+          {
+            "camera": 0,
+            "fps": 4.796758959972177,
+            "mib_per_second": 0.07147866036462888,
+            "first_frame_ms": 2215.9059590194374,
+            "error": null
+          },
+          {
+            "camera": 1,
+            "fps": 4.846725199138554,
+            "mib_per_second": 0.07218318807275388,
+            "first_frame_ms": 2218.0588338524103,
+            "error": null
+          },
+          {
+            "camera": 2,
+            "fps": 4.796758959972177,
+            "mib_per_second": 0.07147866036462888,
+            "first_frame_ms": 2218.149834079668,
+            "error": null
+          },
+          {
+            "camera": 3,
+            "fps": 3.947332894143771,
+            "mib_per_second": 0.0748790727590692,
+            "first_frame_ms": 75.65125008113682,
+            "error": null
+          }
+        ]
+      }
+    }
+  ],
+  "api_latency": {
+    "node": [
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 1.052416511811316,
+        "p95_ms": 4.073458956554532
+      },
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.8305419469252229,
+        "p95_ms": 2.3159999400377274
+      }
+    ],
+    "rust": [
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.8465830469503999,
+        "p95_ms": 1.8447500187903643
+      },
+      {
+        "requests": 300,
+        "errors": 0,
+        "target_rps": 100,
+        "p50_ms": 0.831458019092679,
+        "p95_ms": 1.8008749466389418
+      }
+    ]
+  },
+  "final_cameras": {
+    "node": [
+      {
+        "id": 0,
+        "name": "Replay 1",
+        "ip": "172.29.199.10",
+        "deviceId": "90000001",
+        "username": "admin",
+        "mode": "v380",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 1280,
+        "height": 720,
+        "deviceVersion": 31,
+        "communicationVersion": 20,
+        "transport": "lan",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "connect ECONNREFUSED 172.29.199.10:8800",
+        "streamStats": {
+          "packets": 53642,
+          "bytes": 26362855,
+          "videoPackets": 53642,
+          "audioPackets": 0,
+          "frames": 1759,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": 1792035352140
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 1759,
+        "lastFrameAt": 1792035352141,
+        "viewers": 1,
+        "audio": false,
+        "hasPassword": true
+      },
+      {
+        "id": 1,
+        "name": "Replay 2",
+        "ip": "172.29.199.10",
+        "deviceId": "90000002",
+        "username": "admin",
+        "mode": "v380",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 1280,
+        "height": 720,
+        "deviceVersion": 31,
+        "communicationVersion": 20,
+        "transport": "lan",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "connect ECONNREFUSED 172.29.199.10:8800",
+        "streamStats": {
+          "packets": 53642,
+          "bytes": 26362855,
+          "videoPackets": 53642,
+          "audioPackets": 0,
+          "frames": 1759,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": 1792035352141
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 1759,
+        "lastFrameAt": 1792035352141,
+        "viewers": 1,
+        "audio": false,
+        "hasPassword": true
+      },
+      {
+        "id": 2,
+        "name": "Replay 3",
+        "ip": "172.29.199.10",
+        "deviceId": "90000003",
+        "username": "admin",
+        "mode": "v380",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 1280,
+        "height": 720,
+        "deviceVersion": 31,
+        "communicationVersion": 20,
+        "transport": "lan",
+        "codec": "h264",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "connect ECONNREFUSED 172.29.199.10:8800",
+        "streamStats": {
+          "packets": 53642,
+          "bytes": 26362855,
+          "videoPackets": 53642,
+          "audioPackets": 0,
+          "frames": 1759,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": 1792035352141
+        },
+        "previewError": null,
+        "previewActive": true,
+        "frames": 1759,
+        "lastFrameAt": 1792035352142,
+        "viewers": 1,
+        "audio": false,
+        "hasPassword": true
+      },
+      {
+        "id": 3,
+        "name": "Replay 4",
+        "ip": "172.29.199.10",
+        "deviceId": "90000004",
+        "username": "admin",
+        "mode": "v380",
+        "quality": "hd",
+        "v380Port": 8800,
+        "state": "live",
+        "message": "Video langsung",
+        "width": 640,
+        "height": 480,
+        "deviceVersion": 31,
+        "communicationVersion": 20,
+        "transport": "lan",
+        "codec": "mjpeg",
+        "recording": null,
+        "reconnects": 1,
+        "lastConnectionError": "connect ECONNREFUSED 172.29.199.10:8800",
+        "streamStats": {
+          "packets": 70360,
+          "bytes": 34907355,
+          "videoPackets": 70360,
+          "audioPackets": 0,
+          "frames": 1759,
+          "incompleteFrames": 0,
+          "ignoredPackets": 0,
+          "lastPacketAt": 1792035352142
+        },
+        "previewError": null,
+        "previewActive": false,
+        "frames": 1759,
+        "lastFrameAt": 1792035352143,
+        "viewers": 1,
+        "audio": false,
+        "hasPassword": true
+      }
+    ],
+    "rust": [
+      {
+        "audio": false,
+        "codec": "h264",
+        "communicationVersion": 20,
+        "deviceId": "90000001",
+        "deviceVersion": 31,
+        "frames": 1759,
+        "hasPassword": true,
+        "height": 720,
+        "id": 0,
+        "ip": "172.29.199.10",
+        "lastConnectionError": "Koneksi kamera gagal.",
+        "lastFrameAt": 1792035352141,
+        "message": "Video langsung",
+        "mode": "v380",
+        "name": "Replay 1",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 1,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 0,
+          "bytes": 26358168,
+          "frames": 1758,
+          "ignoredPackets": 0,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792035352140,
+          "packets": 53632,
+          "videoPackets": 53632
+        },
+        "transport": "lan",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 1,
+        "width": 1280
+      },
+      {
+        "audio": false,
+        "codec": "h264",
+        "communicationVersion": 20,
+        "deviceId": "90000002",
+        "deviceVersion": 31,
+        "frames": 1760,
+        "hasPassword": true,
+        "height": 720,
+        "id": 1,
+        "ip": "172.29.199.10",
+        "lastConnectionError": "Koneksi kamera gagal.",
+        "lastFrameAt": 1792035352141,
+        "message": "Video langsung",
+        "mode": "v380",
+        "name": "Replay 2",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 1,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 0,
+          "bytes": 26373855,
+          "frames": 1759,
+          "ignoredPackets": 0,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792035352141,
+          "packets": 53664,
+          "videoPackets": 53664
+        },
+        "transport": "lan",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 1,
+        "width": 1280
+      },
+      {
+        "audio": false,
+        "codec": "h264",
+        "communicationVersion": 20,
+        "deviceId": "90000003",
+        "deviceVersion": 31,
+        "frames": 1759,
+        "hasPassword": true,
+        "height": 720,
+        "id": 2,
+        "ip": "172.29.199.10",
+        "lastConnectionError": "Koneksi kamera gagal.",
+        "lastFrameAt": 1792035352141,
+        "message": "Video langsung",
+        "mode": "v380",
+        "name": "Replay 3",
+        "previewActive": true,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 1,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 0,
+          "bytes": 26358168,
+          "frames": 1758,
+          "ignoredPackets": 0,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792035352140,
+          "packets": 53632,
+          "videoPackets": 53632
+        },
+        "transport": "lan",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 1,
+        "width": 1280
+      },
+      {
+        "audio": false,
+        "codec": "mjpeg",
+        "communicationVersion": 20,
+        "deviceId": "90000004",
+        "deviceVersion": 31,
+        "frames": 1760,
+        "hasPassword": true,
+        "height": 480,
+        "id": 3,
+        "ip": "172.29.199.10",
+        "lastConnectionError": "Koneksi kamera gagal.",
+        "lastFrameAt": 1792035352141,
+        "message": "Video langsung",
+        "mode": "v380",
+        "name": "Replay 4",
+        "previewActive": false,
+        "previewError": null,
+        "quality": "hd",
+        "reconnects": 1,
+        "recording": null,
+        "state": "live",
+        "streamStats": {
+          "audioPackets": 0,
+          "bytes": 34927200,
+          "frames": 1760,
+          "ignoredPackets": 0,
+          "incompleteFrames": 0,
+          "lastPacketAt": 1792035352141,
+          "packets": 70400,
+          "videoPackets": 70400
+        },
+        "transport": "lan",
+        "username": "admin",
+        "v380Port": 8800,
+        "viewers": 1,
+        "width": 640
+      }
+    ]
+  }
+}

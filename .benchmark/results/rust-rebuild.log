@@ -1,0 +1,215 @@
+ Image v380-benchmark:rust Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 544B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 2.31kB done
+#2 DONE 0.0s
+
+#3 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#3 ...
+
+#4 [auth] docker/dockerfile:pull token for registry-1.docker.io
+#4 DONE 0.0s
+
+#3 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#3 DONE 1.4s
+
+#5 docker-image://docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#5 resolve docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e 0.0s done
+#5 CACHED
+
+#6 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#6 ...
+
+#7 [internal] load metadata for docker.io/library/rust:1.99-slim-bookworm
+#7 DONE 0.9s
+
+#6 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#6 DONE 1.3s
+
+#8 [internal] load .dockerignore
+#8 transferring context: 186B done
+#8 DONE 0.0s
+
+#9 [runtime 1/5] FROM docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
+#9 resolve docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 0.0s done
+#9 DONE 0.0s
+
+#10 [builder  1/10] FROM docker.io/library/rust:1.99-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de2644ac9987e4a2f1f2fa
+#10 resolve docker.io/library/rust:1.99-slim-bookworm@sha256:2c3a22f0a5533ea2dd5a16627bc841228151faa2d4de2644ac9987e4a2f1f2fa 0.0s done
+#10 DONE 0.0s
+
+#11 [internal] load build context
+#11 transferring context: 733B done
+#11 DONE 0.0s
+
+#12 [builder  3/10] RUN rustup target add wasm32-unknown-unknown aarch64-unknown-linux-musl
+#12 CACHED
+
+#13 [builder  4/10] RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates     && curl --fail --location --proto '=https' --tlsv1.2       "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/0.2.105/wasm-bindgen-0.2.105-aarch64-unknown-linux-musl.tar.gz"       -o /tmp/wasm-bindgen.tar.gz     && test "$(sha256sum /tmp/wasm-bindgen.tar.gz | cut -d ' ' -f1)" = "26bec5b1e7ba80e0fd65e5d9f4c88c304f04d9c08d2a4da32ab31af8e2fee8eb"     && tar -xzf /tmp/wasm-bindgen.tar.gz -C /tmp     && cp "/tmp/wasm-bindgen-0.2.105-aarch64-unknown-linux-musl/wasm-bindgen" /usr/local/bin/wasm-bindgen     && rm -rf /tmp/wasm-bindgen* /var/lib/apt/lists/*
+#13 CACHED
+
+#14 [builder  2/10] WORKDIR /build
+#14 CACHED
+
+#15 [builder  5/10] COPY Cargo.toml Cargo.lock ./
+#15 CACHED
+
+#16 [builder  7/10] COPY src src
+#16 CACHED
+
+#17 [builder  8/10] COPY ui ui
+#17 CACHED
+
+#18 [builder  6/10] COPY .cargo .cargo
+#18 CACHED
+
+#19 [builder  9/10] COPY public public
+#19 CACHED
+
+#20 [builder 10/10] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/build/target     cargo clean --release -p cctv --target aarch64-unknown-linux-musl     && cargo clean --release -p cctv-ui --target wasm32-unknown-unknown     && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER="$(rustc --print sysroot)/lib/rustlib/aarch64-unknown-linux-gnu/bin/rust-lld"       cargo build --locked --release --target aarch64-unknown-linux-musl     && cargo build --locked --release -p cctv-ui --target wasm32-unknown-unknown     && wasm-bindgen --target web --out-dir public/pkg target/wasm32-unknown-unknown/release/cctv_ui.wasm     && cp target/aarch64-unknown-linux-musl/release/cctv /build/cctv
+#20 0.230      Removed 17 files, 25.2MiB total
+#20 0.317      Removed 11 files, 3.0MiB total
+#20 0.433    Compiling libc v0.2.190
+#20 0.825    Compiling cfg-if v1.0.5
+#20 0.838    Compiling zerofrom v0.1.8
+#20 0.863    Compiling stable_deref_trait v1.2.1
+#20 0.874    Compiling yoke v0.8.3
+#20 0.920    Compiling smallvec v1.16.3
+#20 0.999    Compiling pin-project-lite v0.2.17
+#20 1.014    Compiling futures-core v0.3.34
+#20 1.044    Compiling zerovec v0.11.8
+#20 1.232    Compiling itoa v1.0.18
+#20 1.291    Compiling bytes v1.12.1
+#20 1.618    Compiling scopeguard v1.2.0
+#20 1.643    Compiling lock_api v0.4.14
+#20 1.702    Compiling parking_lot_core v0.9.12
+#20 1.826    Compiling tinystr v0.8.4
+#20 1.883    Compiling errno v0.3.14
+#20 1.918    Compiling writeable v0.6.4
+#20 2.005    Compiling once_cell v1.21.4
+#20 2.061    Compiling litemap v0.8.3
+#20 2.116    Compiling icu_locale_core v2.3.0
+#20 2.991    Compiling signal-hook-registry v1.4.8
+#20 3.118    Compiling parking_lot v0.12.5
+#20 3.447    Compiling http v1.5.0
+#20 4.447    Compiling zerotrie v0.2.5
+#20 4.619    Compiling potential_utf v0.1.6
+#20 4.677    Compiling mio v1.2.4
+#20 4.925    Compiling socket2 v0.6.5
+#20 5.206    Compiling typenum v1.20.1
+#20 5.429    Compiling utf8_iter v1.0.4
+#20 5.462    Compiling icu_collections v2.3.0
+#20 5.738    Compiling generic-array v0.14.7
+#20 6.023    Compiling tokio v1.53.3
+#20 10.27    Compiling icu_provider v2.3.1
+#20 10.56    Compiling http-body v1.1.0
+#20 10.60    Compiling serde_core v1.0.229
+#20 11.37    Compiling tracing-core v0.1.36
+#20 11.68    Compiling percent-encoding v2.3.2
+#20 11.75    Compiling futures-task v0.3.34
+#20 11.80    Compiling slab v0.4.12
+#20 11.85    Compiling log v0.4.34
+#20 11.91    Compiling tracing v0.1.44
+#20 12.01    Compiling futures-util v0.3.34
+#20 12.59    Compiling icu_properties_data v2.3.0
+#20 12.63    Compiling icu_normalizer_data v2.3.0
+#20 12.64    Compiling tower-service v0.3.3
+#20 12.66    Compiling icu_normalizer v2.3.0
+#20 13.07    Compiling icu_properties v2.3.0
+#20 13.56    Compiling form_urlencoded v1.2.2
+#20 13.64    Compiling sync_wrapper v1.0.2
+#20 13.66    Compiling httpdate v1.0.3
+#20 13.77    Compiling try-lock v0.2.5
+#20 13.79    Compiling mime v0.3.17
+#20 14.02    Compiling tower-layer v0.3.3
+#20 14.09    Compiling want v0.3.2
+#20 14.13    Compiling serde v1.0.229
+#20 14.33    Compiling idna_adapter v1.2.2
+#20 14.36    Compiling httparse v1.10.1
+#20 14.51    Compiling http-body-util v0.1.5
+#20 14.57    Compiling crypto-common v0.1.7
+#20 14.60    Compiling atomic-waker v1.1.2
+#20 14.62    Compiling bitflags v2.13.2
+#20 14.72    Compiling hyper v1.12.0
+#20 16.07    Compiling idna v1.1.0
+#20 16.88    Compiling zmij v1.0.23
+#20 17.00    Compiling zerocopy v0.8.63
+#20 18.25    Compiling tower v0.5.3
+#20 18.43    Compiling futures-channel v0.3.34
+#20 18.49    Compiling getrandom v0.2.17
+#20 18.54    Compiling base64 v0.23.1
+#20 18.74    Compiling unicase v2.10.0
+#20 18.86    Compiling memchr v2.8.3
+#20 19.09    Compiling ipnet v2.12.2
+#20 19.55    Compiling futures-sink v0.3.34
+#20 19.59    Compiling ryu v1.0.23
+#20 19.69    Compiling serde_urlencoded v0.7.1
+#20 19.75    Compiling tokio-util v0.7.20
+#20 20.74    Compiling hyper-util v0.1.21
+#20 22.00    Compiling serde_json v1.0.154
+#20 23.35    Compiling mime_guess v2.0.5
+#20 23.57    Compiling rand_core v0.6.4
+#20 23.64    Compiling ppv-lite86 v0.2.21
+#20 23.70    Compiling url v2.5.8
+#20 25.27    Compiling block-buffer v0.10.4
+#20 25.55    Compiling inout v0.1.4
+#20 25.60    Compiling cpufeatures v0.2.17
+#20 25.63    Compiling http-range-header v0.4.2
+#20 25.82    Compiling linux-raw-sys v0.12.1
+#20 25.92    Compiling rustix v1.1.5
+#20 26.82    Compiling tower-http v0.6.11
+#20 27.43    Compiling cipher v0.4.4
+#20 27.49    Compiling digest v0.10.7
+#20 27.55    Compiling num-traits v0.2.19
+#20 27.79    Compiling rand_chacha v0.3.1
+#20 28.21    Compiling getrandom v0.4.3
+#20 28.26    Compiling axum-core v0.5.6
+#20 28.98    Compiling serde_path_to_error v0.1.20
+#20 29.12    Compiling base64 v0.22.1
+#20 29.25    Compiling iana-time-zone v0.1.65
+#20 29.37    Compiling fastrand v2.5.0
+#20 29.44    Compiling matchit v0.8.4
+#20 29.63    Compiling axum v0.8.9
+#20 31.69    Compiling tempfile v3.27.0
+#20 31.97    Compiling chrono v0.4.45
+#20 33.07    Compiling reqwest v0.12.28
+#20 36.34    Compiling rand v0.8.8
+#20 36.66    Compiling sha1 v0.10.7
+#20 36.73    Compiling aes v0.8.4
+#20 36.91    Compiling async-stream v0.3.6
+#20 36.93    Compiling anyhow v1.0.104
+#20 37.10    Compiling hex v0.4.3
+#20 37.16    Compiling cctv v0.2.0 (/build)
+#20 51.73     Finished `release` profile [optimized] target(s) in 51.37s
+#20 51.88    Compiling cctv-ui v0.2.0 (/build/ui)
+#20 52.73     Finished `release` profile [optimized] target(s) in 0.92s
+#20 DONE 53.0s
+
+#21 [runtime 2/5] RUN apt-get update && apt-get install -y --no-install-recommends       ffmpeg rclone ca-certificates tzdata     && rm -rf /var/lib/apt/lists/*
+#21 CACHED
+
+#22 [runtime 3/5] WORKDIR /app
+#22 CACHED
+
+#23 [runtime 4/5] COPY --from=builder /build/cctv ./cctv
+#23 DONE 0.0s
+
+#24 [runtime 5/5] COPY --from=builder /build/public ./public
+#24 DONE 0.0s
+
+#25 exporting to image
+#25 exporting layers 0.1s done
+#25 exporting manifest sha256:cd555a97659883c4d71b63af11e27673205135ee5e7e86855328db0ab4650d06 done
+#25 exporting config sha256:3c50d205d653f3fc8a6dd17d91242c2b7624f0e002d88fc93f529847a6019ed8 done
+#25 exporting attestation manifest sha256:78e98aafef8a87d8c972c01e5d6355046e05c918c5e2a08a4251cf7191f92bc6 done
+#25 exporting manifest list sha256:ce97045b031a187ec40c59fa7a98f2a5af79282959f3b433ad9529814887bb31 done
+#25 naming to docker.io/library/v380-benchmark:rust done
+#25 unpacking to docker.io/library/v380-benchmark:rust 0.0s done
+#25 DONE 0.2s
+
+#26 resolving provenance for metadata file
+#26 DONE 0.0s
+ Image v380-benchmark:rust Built 
