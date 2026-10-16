@@ -103,7 +103,7 @@ async fn guard(
     next: Next,
 ) -> Response {
     let path = request.uri().path();
-    if matches!(path, "/login" | "/style.css" | "/favicon.svg")
+    if matches!(path, "/login" | "/login.js" | "/style.css" | "/favicon.svg")
         || session_token(request.headers()).is_some_and(|t| auth.valid(t))
     {
         return next.run(request).await;
