@@ -14,6 +14,7 @@ use axum::{
     routing::{get, post},
 };
 use chrono::{Local, Timelike};
+use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{convert::Infallible, path::PathBuf, process::Stdio, sync::Arc};
@@ -74,6 +75,7 @@ pub fn router_with_auth(app: Arc<App>, public_dir: PathBuf, auth: Option<Arc<Aut
     if let Some(auth) = auth {
         router = router
             .route("/login", get(login_page).post(login_submit))
+            .route("/api/session", get(session_status))
             .layer(middleware::from_fn_with_state(auth.clone(), guard))
             .layer(Extension(auth));
     }
@@ -104,10 +106,31 @@ async fn guard(
     next: Next,
 ) -> Response {
     let path = request.uri().path();
-    if matches!(path, "/login" | "/login.js" | "/style.css" | "/favicon.svg")
-        || session_token(request.headers()).is_some_and(|t| auth.valid(t))
-    {
+    if matches!(path, "/login" | "/login.js" | "/style.css" | "/favicon.svg") {
         return next.run(request).await;
+    }
+    if let Some(deadline) = session_token(request.headers()).and_then(|t| auth.deadline(t)) {
+        let deadline = tokio::time::Instant::from_std(deadline);
+        if let Ok(response) = tokio::time::timeout_at(deadline, next.run(request)).await {
+            let (mut parts, body) = response.into_parts();
+            // Cached lengths become invalid when a response is cut off at session expiry.
+            parts.headers.remove(header::CONTENT_LENGTH);
+            let stream = async_stream::stream! {
+                let mut data = body.into_data_stream();
+                loop {
+                    tokio::select! {
+                        biased;
+                        _ = tokio::time::sleep_until(deadline) => break,
+                        chunk = data.next() => match chunk {
+                            Some(chunk) => yield chunk,
+                            None => break,
+                        }
+                    }
+                }
+            };
+            return Response::from_parts(parts, Body::from_stream(stream));
+        }
+        return ApiError(StatusCode::UNAUTHORIZED, "Sesi berakhir; masukkan PIN lagi.".into()).into_response();
     }
     let api = ["/api/", "/stream/", "/audio/", "/snapshot/", "/recordings/", "/thumbs/"]
         .iter()
@@ -117,6 +140,12 @@ async fn guard(
             .into_response()
     } else {
         axum::response::Redirect::to("/login").into_response()
+    }
+}
+async fn session_status(Extension(auth): Extension<Arc<Auth>>, headers: HeaderMap) -> Response {
+    match session_token(&headers).and_then(|t| auth.deadline(t)) {
+        Some(deadline) => Json(json!({"remainingMs": deadline.saturating_duration_since(std::time::Instant::now()).as_millis()})).into_response(),
+        None => ApiError(StatusCode::UNAUTHORIZED, "Sesi berakhir.".into()).into_response(),
     }
 }
 async fn login_page(Extension(auth): Extension<Arc<Auth>>, headers: HeaderMap) -> Response {

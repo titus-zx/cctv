@@ -15,6 +15,8 @@ services:
       CONFIG_PATH: /app/runtime/config.json
       RCLONE_CONFIG: /app/rclone/rclone.conf
       HOME: /tmp
+      MOTION_CONFIDENCE: "${MOTION_CONFIDENCE:-0.5}"
+      MOTION_MIN_AREA: "${MOTION_MIN_AREA:-0.002}"
       RECORDING_RETENTION_DAYS: "${RECORDING_RETENTION_DAYS:-}"
       RECORDING_RETENTION_CHECK_SECONDS: "${RECORDING_RETENTION_CHECK_SECONDS:-}"
     ports:

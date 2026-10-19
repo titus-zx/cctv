@@ -28,7 +28,7 @@ pub struct Clip {
     pub device_id: String,
     pub start: DateTime<Utc>,
     pub size: u64,
-    /// Thumbnail exists when present; value is the peak keyframe-to-keyframe scene change.
+    /// Confidence of recognized object movement (0 when no movement was confirmed).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub motion: Option<f32>,
     pub moving: bool,
@@ -72,9 +72,8 @@ impl Clip {
         self.moving = motion.is_some_and(|m| m >= MOTION_THRESHOLD);
     }
 }
-/// Scene-change score (0..1) above which a clip counts as having movement. Sensor noise on a
-/// still scene measures well below this.
-pub const MOTION_THRESHOLD: f32 = 0.008;
+/// Positive scores are confidence values from the object detector.
+pub const MOTION_THRESHOLD: f32 = 0.5;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ByteRange {
     Full,

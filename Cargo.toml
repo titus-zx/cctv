@@ -27,6 +27,7 @@ sha1 = "0.10"
 tempfile = "3"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io", "rt"] }
+tract-onnx = "0.22"
 tower-http = { version = "0.6", features = ["fs", "set-header"] }
 url = "2"
 

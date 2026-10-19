@@ -80,7 +80,11 @@ async fn upload_recovery_ignores_partial_files_and_preserves_local_clips() {
     let stop = CancellationToken::new();
     let queue = UploadQueue::new(Store::new(&settings(dir.path())), true, stop.clone());
     queue.recover(dir.path()).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    tokio::time::timeout(std::time::Duration::from_secs(240), async {
+        while queue.status.lock().await.uploaded != 1 {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    }).await.expect("recovered clip should upload after analysis drains");
     assert_eq!(queue.status.lock().await.uploaded, 1);
     assert!(complete.exists());
     stop.cancel();
@@ -222,14 +226,19 @@ async fn thumbnails_and_index_entries_follow_retention() {
     stop.cancel();
 }
 #[tokio::test]
-async fn thumbnail_picks_motion_and_scores_still_scenes_low() {
+async fn thumbnail_rejects_scene_changes_without_recognized_objects() {
     if std::process::Command::new("ffmpeg").arg("-version").output().is_err() {
+        return;
+    }
+    let model = std::env::var("MOTION_MODEL_PATH").unwrap_or_else(|_| "models/yolov8n.onnx".into());
+    if !Path::new(&model).exists() {
+        eprintln!("Model unavailable; run sh tools/fetch-motion-model.sh to enable ONNX integration test");
         return;
     }
     let dir = tempfile::tempdir().unwrap();
     let make = |name: &str, source: &str| {
         let status = std::process::Command::new("ffmpeg")
-            .args(["-v", "error", "-f", "lavfi", "-i", source, "-t", "6", "-g", "10"])
+            .args(["-v", "error", "-f", "lavfi", "-i", source, "-t", "2", "-g", "10"])
             .args(["-c:v", "libx264", "-pix_fmt", "yuv420p"])
             .arg(dir.path().join(name))
             .status()
@@ -248,5 +257,39 @@ async fn thumbnail_picks_motion_and_scores_still_scenes_low() {
     let still = store.index.motion("cam1_20260101_100000.mp4").unwrap();
     let moving = store.index.motion("cam1_20260101_110000.mp4").unwrap();
     assert!(still < storage::MOTION_THRESHOLD, "{still}");
-    assert!(moving >= storage::MOTION_THRESHOLD, "{moving}");
+    assert!(moving < storage::MOTION_THRESHOLD, "scene change alone must not count: {moving}");
+}
+
+#[test]
+fn legacy_scene_scores_are_not_object_detections() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".index.json");
+    std::fs::write(&path, r#"{"clips":{"cam1_20260101_100000.mp4":{"size":10,"motion":0.9}}}"#).unwrap();
+    let index = cctv::index::Index::new(Some(path));
+    assert_eq!(index.motion("cam1_20260101_100000.mp4"), None);
+    index.set_motion("cam1_20260101_100000.mp4", 0.9);
+    assert_eq!(index.motion("cam1_20260101_100000.mp4"), Some(0.9));
+}
+
+/// Optional real-image smoke test: MOTION_TEST_IMAGE=/path/to/dog.jpg cargo test real_dog -- --nocapture
+#[tokio::test]
+async fn real_dog_must_move_before_being_labelled_motion() {
+    let Ok(image) = std::env::var("MOTION_TEST_IMAGE") else { return; };
+    let dir = tempfile::tempdir().unwrap();
+    for moving in [false, true] {
+        let video = dir.path().join(if moving { "moving.mp4" } else { "still.mp4" });
+        let filter = if moving {
+            "scale=320:320:force_original_aspect_ratio=decrease,pad=960:640:x=400:y=160:color=gray,crop=640:640:x=320-40*t:y=0"
+        } else {
+            "scale=320:320:force_original_aspect_ratio=decrease,pad=640:640:x=160:y=160:color=gray"
+        };
+        let status = std::process::Command::new("ffmpeg").args(["-v","error","-loop","1","-i"])
+            .arg(&image).args(["-vf",filter,"-t","3","-r","4","-c:v","libx264","-pix_fmt","yuv420p"])
+            .arg(&video).status().unwrap();
+        assert!(status.success());
+        let (at, score) = cctv::motion::analyze(&video).await.unwrap();
+        eprintln!("real dog moving={moving}: at={at}, confidence={score}");
+        if moving { assert!(score >= storage::MOTION_THRESHOLD); }
+        else { assert_eq!(score, 0.); }
+    }
 }

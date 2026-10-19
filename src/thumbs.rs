@@ -1,6 +1,6 @@
 use crate::{
     process,
-    storage::{MOTION_THRESHOLD, Store, parse_name},
+    storage::{Store, parse_name},
 };
 use anyhow::{Context, Result, bail};
 use std::{
@@ -28,32 +28,6 @@ pub fn clip_name(thumb: &str) -> Option<String> {
     let name = format!("{}.mp4", thumb.strip_suffix(".jpg")?);
     parse_name(&name, 0).map(|_| name)
 }
-fn parse_scores(output: &str) -> Vec<(f64, f32)> {
-    let mut time = None;
-    let mut scores = vec![];
-    for line in output.lines() {
-        if let Some(t) = line.split("pts_time:").nth(1) {
-            time = t.trim().parse::<f64>().ok();
-        } else if let Some(v) = line.strip_prefix("lavfi.scene_score=")
-            && let (Some(t), Ok(v)) = (time, v.trim().parse::<f32>())
-        {
-            scores.push((t, v));
-        }
-    }
-    scores
-}
-/// Picks the keyframe where the scene changed most; on a still clip, the middle one.
-fn best_frame(scores: &[(f64, f32)]) -> Option<(f64, f32)> {
-    let peak = scores
-        .iter()
-        .copied()
-        .max_by(|a, b| a.1.total_cmp(&b.1))?;
-    if peak.1 >= MOTION_THRESHOLD {
-        Some(peak)
-    } else {
-        Some((scores[scores.len() / 2].0, peak.1))
-    }
-}
 async fn run(command: &mut tokio::process::Command, capture: bool) -> Result<String> {
     command
         .stdin(Stdio::null())
@@ -68,22 +42,9 @@ async fn run(command: &mut tokio::process::Command, capture: bool) -> Result<Str
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
-/// Writes a thumbnail of the most active moment and returns the motion score. Only keyframes
-/// are decoded, so this costs a fraction of a second per minute of video.
+/// Thumbnail and confidence of confirmed movement by a recognized object.
 pub async fn analyze(video: &Path, output: &Path) -> Result<f32> {
-    let mut scan = process::ffmpeg();
-    scan.args(["-hide_banner", "-loglevel", "error", "-skip_frame", "nokey", "-i"])
-        .arg(video)
-        .args([
-            "-an",
-            "-vf",
-            &format!("scale={THUMB_WIDTH}:-2,select=gte(scene\\,0),metadata=print:file=-"),
-            "-f",
-            "null",
-            "-",
-        ]);
-    let scores = parse_scores(&run(&mut scan, true).await?);
-    let (at, motion) = best_frame(&scores).context("Tidak ada keyframe.")?;
+    let (at, motion) = crate::motion::analyze(video).await?;
     let temp = output.with_file_name(format!(
         ".tmp-{}",
         output.file_name().context("nama thumbnail")?.to_string_lossy()
@@ -125,8 +86,9 @@ impl Store {
         if tokio::fs::create_dir_all(thumb_dir(&self.dir)).await.is_err() {
             return;
         }
-        if let Ok(motion) = analyze(file, &output).await {
-            self.index.set_motion(&name, motion);
+        match analyze(file, &output).await {
+            Ok(motion) => self.index.set_motion(&name, motion),
+            Err(error) => eprintln!("Analisis objek {name} gagal: {error:#}"),
         }
     }
 }

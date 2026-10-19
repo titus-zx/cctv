@@ -291,3 +291,36 @@ fn pin_must_be_six_digits() {
     }
     assert!(Auth::new("000123").is_ok());
 }
+
+#[tokio::test]
+async fn active_requests_do_not_extend_deadline_and_open_streams_are_closed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _, stop, task) = fixture(dir.path()).await;
+    let auth = Arc::new(Auth::with_ttl("123456", std::time::Duration::from_millis(600)).unwrap());
+    let router = server::router_with_auth(app, dir.path().into(), Some(auth));
+    let response = call(&router, "POST", "/login", None, "pin=123456").await;
+    let cookie = cookie_of(&response);
+    let response = call(&router, "GET", "/api/session", Some(&cookie), "").await;
+    let first: Value = serde_json::from_slice(&to_bytes(response.into_body(), 10000).await.unwrap()).unwrap();
+    let video = call(&router, "GET", "/stream/0", Some(&cookie), "").await;
+    let audio = call(&router, "GET", "/audio/0", Some(&cookie), "").await;
+    assert_eq!(video.status(), StatusCode::OK);
+    assert_eq!(audio.status(), StatusCode::OK);
+    for _ in 0..3 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let response = call(&router, "GET", "/api/session", Some(&cookie), "").await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let now: Value = serde_json::from_slice(&to_bytes(response.into_body(), 10000).await.unwrap()).unwrap();
+        assert!(now["remainingMs"].as_u64().unwrap() < first["remainingMs"].as_u64().unwrap());
+    }
+    let closed = async {
+        let (video, audio) = tokio::join!(to_bytes(video.into_body(), 10000), to_bytes(audio.into_body(), 10000));
+        assert!(video.unwrap().is_empty());
+        assert!(audio.unwrap().is_empty());
+    };
+    tokio::time::timeout(std::time::Duration::from_millis(500), closed).await.expect("streams must close at the original login deadline");
+    assert_eq!(call(&router, "GET", "/api/session", Some(&cookie), "").await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(call(&router, "GET", "/api/cameras", Some(&cookie), "").await.status(), StatusCode::UNAUTHORIZED);
+    stop.cancel();
+    let _ = task.await;
+}

@@ -13,8 +13,10 @@ use std::{
 #[derive(Clone, Copy, Serialize, Deserialize)]
 struct Meta {
     size: u64,
-    /// Highest scene-change score between keyframes; `Some` also means a thumbnail exists.
+    /// Confidence of confirmed object movement.
     motion: Option<f32>,
+    #[serde(default)]
+    motion_version: u8,
 }
 /// Older index files stored only the size.
 #[derive(Deserialize)]
@@ -51,8 +53,15 @@ impl Index {
         {
             for (name, entry) in data.clips {
                 let meta = match entry {
-                    Entry::Size(size) => Meta { size, motion: None },
-                    Entry::Full(meta) => meta,
+                    Entry::Size(size) => Meta { size, motion: None, motion_version: crate::motion::VERSION },
+                    Entry::Full(mut meta) => {
+                        if meta.motion_version != crate::motion::VERSION {
+                            meta.motion = None;
+                            meta.motion_version = crate::motion::VERSION;
+                            inner.dirty = true;
+                        }
+                        meta
+                    },
                 };
                 if let Some(day) = day_of(&name) {
                     inner.days.entry(day).or_default().insert(name, meta);
@@ -78,7 +87,7 @@ impl Index {
                 .or_default()
                 .entry(name.into())
                 .and_modify(|m| m.size = size)
-                .or_insert(Meta { size, motion: None });
+                .or_insert(Meta { size, motion: None, motion_version: crate::motion::VERSION });
             inner.dirty = true;
         }
     }
@@ -87,6 +96,7 @@ impl Index {
             let mut inner = self.inner.lock().unwrap();
             if let Some(meta) = inner.days.get_mut(&day).and_then(|b| b.get_mut(name)) {
                 meta.motion = Some(motion);
+                meta.motion_version = crate::motion::VERSION;
                 inner.dirty = true;
             }
         }
@@ -137,7 +147,7 @@ impl Index {
             if let Some(day) = day_of(&name) {
                 // Keep thumbnail/motion data across syncs.
                 let motion = inner.days.get(&day).and_then(|b| b.get(&name)).and_then(|m| m.motion);
-                fresh.entry(day).or_default().insert(name, Meta { size, motion });
+                fresh.entry(day).or_default().insert(name, Meta { size, motion, motion_version: crate::motion::VERSION });
             }
         }
         for (day, bucket) in &inner.days {

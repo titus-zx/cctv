@@ -8,6 +8,7 @@ use web_sys::{Element, Event, EventTarget, RequestInit, Response};
 #[derive(Default)]
 struct Ui {
     cameras: Vec<Value>,
+    session_deadline: Option<f64>,
     cards: HashMap<usize, Element>,
     loading: bool,
     playback: bool,
@@ -146,6 +147,37 @@ fn toast(message: &str) {
     hidden_at("#toast", false);
     later(4000, || hidden_at("#toast", true));
 }
+fn expire_session() {
+    release_ptz();
+    stop_talk();
+    stop_sound();
+    if let Some(context) = UI.with(|ui| ui.borrow_mut().audio_context.take()) {
+        let _ = call(&context, "close", &[]);
+    }
+    if let Ok(video) = q("#pb-video") {
+        let _ = call(video.as_ref(), "pause", &[]);
+        let _ = video.remove_attribute("src");
+        let _ = call(video.as_ref(), "load", &[]);
+    }
+    let _ = window().location().replace("/login");
+}
+fn check_session() {
+    let expired = UI.with(|ui| ui.borrow().session_deadline.is_some_and(|d| js_sys::Date::now() >= d));
+    if expired { expire_session(); }
+}
+async fn initialize_session() {
+    // Anchor before the request so network latency can only shorten the viewing period.
+    let started = js_sys::Date::now();
+    match api("/api/session", None).await {
+        Ok(session) => {
+            let remaining = session["remainingMs"].as_f64().unwrap_or(0.);
+            UI.with(|ui| ui.borrow_mut().session_deadline = Some(started + remaining));
+            later(remaining.min(300_000.) as i32, expire_session);
+            check_session();
+        }
+        Err(_) => expire_session(),
+    }
+}
 async fn response(url: &str, body: Option<&Value>) -> Result<Response, JsValue> {
     let init = RequestInit::new();
     let headers = web_sys::Headers::new()?;
@@ -161,7 +193,7 @@ async fn response(url: &str, body: Option<&Value>) -> Result<Response, JsValue> 
         .dyn_into::<Response>()?;
     if response.status() == 401 {
         // Session expired: force the PIN page again.
-        let _ = window().location().assign("/login");
+        expire_session();
     }
     Ok(response)
 }
@@ -1037,6 +1069,10 @@ fn begin_ptz(camera_id: usize, direction: String) {
 }
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
+    spawn_local(initialize_session());
+    bind(document().as_ref(), "visibilitychange", |_| check_session())?;
+    bind(window().as_ref(), "focus", |_| check_session())?;
+    interval(1000, check_session)?;
     let date = js_sys::Date::new_0();
     value_at(
         "#pb-date",

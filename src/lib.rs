@@ -3,6 +3,7 @@ pub mod camera;
 pub mod cli;
 pub mod config;
 pub mod index;
+pub mod motion;
 pub mod process;
 pub mod protocol;
 pub mod recording;

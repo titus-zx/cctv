@@ -2,8 +2,12 @@
 FROM rust:1.99-slim-bookworm AS builder
 ARG WASM_BINDGEN_VERSION=0.2.105
 WORKDIR /build
+# YOLOv8n COCO ONNX, pinned to a source revision and verified before inclusion.
+ADD https://raw.githubusercontent.com/Hyuto/yolov8-onnxruntime-web/fc4a52c466d15ad4519873a0cef22fbc935b93b6/public/model/yolov8n.onnx /build/models/yolov8n.onnx
+RUN echo "505648ada344cd9f3f31e51d49c489c070819bc96cc758258a8fd51488e00579  /build/models/yolov8n.onnx" | sha256sum -c - \
+    && chmod 644 /build/models/yolov8n.onnx
 RUN rustup target add wasm32-unknown-unknown x86_64-unknown-linux-musl
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates musl-tools \
     && curl --fail --location --proto '=https' --tlsv1.2 \
       "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
       -o /tmp/wasm-bindgen.tar.gz \
@@ -34,6 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=builder /build/cctv ./cctv
 COPY --from=builder /build/public ./public
+COPY --from=builder /build/models ./models
 ENV HOST=0.0.0.0 PORT=3380 TZ=Asia/Jakarta \
     CONFIG_PATH=/app/runtime/config.json RCLONE_CONFIG=/app/rclone/rclone.conf
 USER 1000:1000

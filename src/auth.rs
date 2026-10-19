@@ -81,15 +81,18 @@ impl Auth {
         Ok(token)
     }
     pub fn valid(&self, token: &str) -> bool {
+        self.deadline(token).is_some()
+    }
+    pub fn deadline(&self, token: &str) -> Option<Instant> {
         let now = Instant::now();
         let mut state = self.state.lock().unwrap();
         match state.sessions.get(token) {
-            Some(expires) if *expires > now => true,
+            Some(expires) if *expires > now => Some(*expires),
             Some(_) => {
                 state.sessions.remove(token);
-                false
+                None
             }
-            None => false,
+            None => None,
         }
     }
 }
