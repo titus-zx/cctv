@@ -75,7 +75,7 @@ pub fn router_with_auth(app: Arc<App>, public_dir: PathBuf, auth: Option<Arc<Aut
     if let Some(auth) = auth {
         router = router
             .route("/login", get(login_page).post(login_submit))
-            .route("/api/session", get(session_status))
+            .route("/api/session", get(session_status).post(session_activity))
             .layer(middleware::from_fn_with_state(auth.clone(), guard))
             .layer(Extension(auth));
     }
@@ -109,9 +109,13 @@ async fn guard(
     if matches!(path, "/login" | "/login.js" | "/style.css" | "/favicon.svg") {
         return next.run(request).await;
     }
-    if let Some(deadline) = session_token(request.headers()).and_then(|t| auth.deadline(t)) {
-        let deadline = tokio::time::Instant::from_std(deadline);
-        if let Ok(response) = tokio::time::timeout_at(deadline, next.run(request)).await {
+    if let Some(deadline) = session_token(request.headers()).and_then(|t| auth.subscribe(t)) {
+        let response = tokio::select! {
+            biased;
+            _ = auth::expired(deadline.clone()) => None,
+            response = next.run(request) => Some(response),
+        };
+        if let Some(response) = response {
             let (mut parts, body) = response.into_parts();
             // Cached lengths become invalid when a response is cut off at session expiry.
             parts.headers.remove(header::CONTENT_LENGTH);
@@ -120,7 +124,7 @@ async fn guard(
                 loop {
                     tokio::select! {
                         biased;
-                        _ = tokio::time::sleep_until(deadline) => break,
+                        _ = auth::expired(deadline.clone()) => break,
                         chunk = data.next() => match chunk {
                             Some(chunk) => yield chunk,
                             None => break,
@@ -140,6 +144,18 @@ async fn guard(
             .into_response()
     } else {
         axum::response::Redirect::to("/login").into_response()
+    }
+}
+async fn session_activity(Extension(auth): Extension<Arc<Auth>>, headers: HeaderMap) -> Response {
+    let Some(token) = session_token(&headers) else {
+        return ApiError(StatusCode::UNAUTHORIZED, "Sesi berakhir.".into()).into_response();
+    };
+    match auth.touch(token) {
+        Some(deadline) => (
+            [(header::SET_COOKIE, format!("{}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={}", auth::COOKIE, auth::SESSION_TTL.as_secs()))],
+            Json(json!({"remainingMs": deadline.saturating_duration_since(std::time::Instant::now()).as_millis()})),
+        ).into_response(),
+        None => ApiError(StatusCode::UNAUTHORIZED, "Sesi berakhir.".into()).into_response(),
     }
 }
 async fn session_status(Extension(auth): Extension<Arc<Auth>>, headers: HeaderMap) -> Response {

@@ -9,6 +9,8 @@ use web_sys::{Element, Event, EventTarget, RequestInit, Response};
 struct Ui {
     cameras: Vec<Value>,
     session_deadline: Option<f64>,
+    session_pending: bool,
+    session_busy: bool,
     cards: HashMap<usize, Element>,
     loading: bool,
     playback: bool,
@@ -163,20 +165,43 @@ fn expire_session() {
 }
 fn check_session() {
     let expired = UI.with(|ui| ui.borrow().session_deadline.is_some_and(|d| js_sys::Date::now() >= d));
-    if expired { expire_session(); }
+    // Another tab may have extended this session. Ask the server before logging out.
+    if expired { request_session(false); }
 }
-async fn initialize_session() {
-    // Anchor before the request so network latency can only shorten the viewing period.
-    let started = js_sys::Date::now();
-    match api("/api/session", None).await {
-        Ok(session) => {
-            let remaining = session["remainingMs"].as_f64().unwrap_or(0.);
-            UI.with(|ui| ui.borrow_mut().session_deadline = Some(started + remaining));
-            later(remaining.min(300_000.) as i32, expire_session);
-            check_session();
+fn request_session(activity: bool) {
+    let busy = UI.with(|ui| {
+        let mut ui = ui.borrow_mut();
+        if ui.session_busy { return true; }
+        ui.session_busy = true;
+        if activity { ui.session_pending = false; }
+        false
+    });
+    if busy { return; }
+    spawn_local(async move {
+        let started = js_sys::Date::now();
+        let body = activity.then(|| json!({}));
+        match api("/api/session", body).await {
+            Ok(session) => {
+                let remaining = session["remainingMs"].as_f64().unwrap_or(0.);
+                UI.with(|ui| ui.borrow_mut().session_deadline = Some(started + remaining));
+            }
+            Err(_) => expire_session(),
         }
-        Err(_) => expire_session(),
-    }
+        UI.with(|ui| ui.borrow_mut().session_busy = false);
+    });
+}
+fn flush_session_activity() {
+    if UI.with(|ui| ui.borrow().session_pending) { request_session(true); }
+}
+fn record_activity(event: Event) {
+    if !event.is_trusted() || document().hidden() { return; }
+    let urgent = UI.with(|ui| {
+        let mut ui = ui.borrow_mut();
+        ui.session_pending = true;
+        ui.session_deadline.is_some_and(|d| d - js_sys::Date::now() < 1500.)
+    });
+    // Batch frequent pointer events, but send immediately near the idle deadline.
+    if urgent { flush_session_activity(); }
 }
 async fn response(url: &str, body: Option<&Value>) -> Result<Response, JsValue> {
     let init = RequestInit::new();
@@ -1069,10 +1094,16 @@ fn begin_ptz(camera_id: usize, direction: String) {
 }
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
-    spawn_local(initialize_session());
+    request_session(false);
+    for name in ["pointerdown", "pointermove", "keydown", "wheel", "input", "touchstart"] {
+        bind(document().as_ref(), name, record_activity)?;
+    }
     bind(document().as_ref(), "visibilitychange", |_| check_session())?;
     bind(window().as_ref(), "focus", |_| check_session())?;
-    interval(1000, check_session)?;
+    interval(1000, || {
+        flush_session_activity();
+        check_session();
+    })?;
     let date = js_sys::Date::new_0();
     value_at(
         "#pb-date",

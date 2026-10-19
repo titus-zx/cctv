@@ -293,7 +293,7 @@ fn pin_must_be_six_digits() {
 }
 
 #[tokio::test]
-async fn active_requests_do_not_extend_deadline_and_open_streams_are_closed() {
+async fn background_polling_does_not_extend_idle_deadline_and_streams_close() {
     let dir = tempfile::tempdir().unwrap();
     let (app, _, stop, task) = fixture(dir.path()).await;
     let auth = Arc::new(Auth::with_ttl("123456", std::time::Duration::from_millis(600)).unwrap());
@@ -321,6 +321,35 @@ async fn active_requests_do_not_extend_deadline_and_open_streams_are_closed() {
     tokio::time::timeout(std::time::Duration::from_millis(500), closed).await.expect("streams must close at the original login deadline");
     assert_eq!(call(&router, "GET", "/api/session", Some(&cookie), "").await.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(call(&router, "GET", "/api/cameras", Some(&cookie), "").await.status(), StatusCode::UNAUTHORIZED);
+    stop.cancel();
+    let _ = task.await;
+}
+
+#[tokio::test]
+async fn user_activity_extends_cookie_and_existing_streams_but_cannot_revive_expired_session() {
+    use std::time::Duration;
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _, stop, task) = fixture(dir.path()).await;
+    let auth = Arc::new(Auth::with_ttl("123456", Duration::from_millis(800)).unwrap());
+    let router = server::router_with_auth(app, dir.path().into(), Some(auth));
+    let response = call(&router, "POST", "/login", None, "pin=123456").await;
+    let cookie = cookie_of(&response);
+    let video = call(&router, "GET", "/stream/0", Some(&cookie), "").await;
+    let audio = call(&router, "GET", "/audio/0", Some(&cookie), "").await;
+    let mut video = Box::pin(to_bytes(video.into_body(), 10000));
+    let mut audio = Box::pin(to_bytes(audio.into_body(), 10000));
+    tokio::time::sleep(Duration::from_millis(450)).await;
+    let response = call(&router, "POST", "/api/session", Some(&cookie), "{}").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(cookie_of(&response), cookie, "activity must refresh the cookie for the same token");
+    tokio::time::sleep(Duration::from_millis(450)).await;
+    assert_eq!(call(&router, "GET", "/api/session", Some(&cookie), "").await.status(), StatusCode::OK, "session must outlive the original login deadline");
+    assert!(tokio::time::timeout(Duration::from_millis(30), &mut video).await.is_err(), "video must stay open beyond original deadline");
+    assert!(tokio::time::timeout(Duration::from_millis(30), &mut audio).await.is_err(), "audio must stay open beyond original deadline");
+    let (video, audio) = tokio::time::timeout(Duration::from_millis(700), async { tokio::join!(video, audio) }).await.expect("streams must close after inactivity");
+    assert!(video.unwrap().is_empty());
+    assert!(audio.unwrap().is_empty());
+    assert_eq!(call(&router, "POST", "/api/session", Some(&cookie), "{}").await.status(), StatusCode::UNAUTHORIZED);
     stop.cancel();
     let _ = task.await;
 }

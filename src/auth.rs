@@ -1,5 +1,6 @@
 use anyhow::{Result, bail};
 use rand::RngCore;
+use tokio::sync::watch;
 use std::{
     collections::HashMap,
     sync::Mutex,
@@ -17,11 +18,11 @@ pub enum LoginError {
 }
 #[derive(Default)]
 struct State {
-    sessions: HashMap<String, Instant>,
+    sessions: HashMap<String, watch::Sender<Instant>>,
     failures: u32,
     locked_until: Option<Instant>,
 }
-/// PIN gate with in-memory sessions that expire a fixed time after login (not extended by use).
+/// PIN gate with sessions that expire after five minutes without explicit user activity.
 pub struct Auth {
     pin: Vec<u8>,
     ttl: Duration,
@@ -73,26 +74,55 @@ impl Auth {
             return Err(LoginError::Wrong);
         }
         state.failures = 0;
-        state.sessions.retain(|_, expires| *expires > now);
+        state.sessions.retain(|_, expires| *expires.borrow() > now);
         let mut bytes = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut bytes);
         let token = hex::encode(bytes);
-        state.sessions.insert(token.clone(), now + self.ttl);
+        state.sessions.insert(token.clone(), watch::channel(now + self.ttl).0);
         Ok(token)
     }
     pub fn valid(&self, token: &str) -> bool {
         self.deadline(token).is_some()
     }
     pub fn deadline(&self, token: &str) -> Option<Instant> {
+        self.subscribe(token).map(|deadline| *deadline.borrow())
+    }
+    pub fn subscribe(&self, token: &str) -> Option<watch::Receiver<Instant>> {
         let now = Instant::now();
         let mut state = self.state.lock().unwrap();
-        match state.sessions.get(token) {
-            Some(expires) if *expires > now => Some(*expires),
-            Some(_) => {
-                state.sessions.remove(token);
-                None
+        if let Some(expires) = state.sessions.get(token)
+            && *expires.borrow() > now
+        {
+            return Some(expires.subscribe());
+        }
+        state.sessions.remove(token);
+        None
+    }
+    /// Only the activity endpoint renews sessions; background requests never do.
+    pub fn touch(&self, token: &str) -> Option<Instant> {
+        let now = Instant::now();
+        let mut state = self.state.lock().unwrap();
+        if let Some(expires) = state.sessions.get(token)
+            && *expires.borrow() > now
+        {
+            let deadline = now + self.ttl;
+            expires.send_replace(deadline);
+            return Some(deadline);
+        }
+        state.sessions.remove(token);
+        None
+    }
+}
+/// Existing streams observe extensions as well as expiry, without reconnecting.
+pub async fn expired(mut deadline: watch::Receiver<Instant>) {
+    loop {
+        let at = *deadline.borrow_and_update();
+        tokio::select! {
+            biased;
+            changed = deadline.changed() => if changed.is_err() { return; },
+            _ = tokio::time::sleep_until(tokio::time::Instant::from_std(at)) => {
+                if *deadline.borrow() <= Instant::now() { return; }
             }
-            None => None,
         }
     }
 }
