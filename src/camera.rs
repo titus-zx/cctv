@@ -78,6 +78,9 @@ impl CameraHandle {
             if record.is_object() {
                 record["uploaded"] = json!(queue.uploaded);
                 record["pending"] = json!(queue.pending);
+                record["analysisPending"] = json!(queue.analysis_pending);
+                record["analysisSkipped"] = json!(queue.analysis_skipped);
+                record["analysisFailed"] = json!(queue.analysis_failed);
                 if record["error"].is_null() {
                     record["error"] = json!(queue.error)
                 }

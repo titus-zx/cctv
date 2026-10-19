@@ -1,6 +1,6 @@
-//! YOLOv8 COCO object detection, followed by temporal movement confirmation.
+//! Persistent movement gate, followed by one YOLOv8 COCO object check.
 //! No scene-change fallback: inference failures leave the clip unclassified.
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::{
     path::Path,
     process::Stdio,
@@ -12,8 +12,7 @@ use tract_onnx::prelude::*;
 
 const SIDE: usize = 640;
 const FRAME_BYTES: usize = SIDE * SIDE * 3;
-const FPS: f64 = 2.0;
-pub const VERSION: u8 = 2;
+pub const VERSION: u8 = 3;
 type Model = TypedRunnableModel<TypedModel>;
 static MODEL: OnceLock<Arc<Model>> = OnceLock::new();
 
@@ -25,7 +24,6 @@ struct Detection {
     y: f32,
     w: f32,
     h: f32,
-    steps: u32,
 }
 fn overlap(a: &Detection, b: &Detection) -> f32 {
     let w = (a.x + a.w / 2.).min(b.x + b.w / 2.) - (a.x - a.w / 2.).max(b.x - b.w / 2.);
@@ -98,7 +96,6 @@ fn decode(output: &Tensor, confidence: f32, min_area: f32) -> Result<Vec<Detecti
             y,
             w,
             h,
-            steps: 0,
         });
     }
     found.sort_by(|a, b| b.confidence.total_cmp(&a.confidence));
@@ -116,127 +113,131 @@ fn decode(output: &Tensor, confidence: f32, min_area: f32) -> Result<Vec<Detecti
     }
     Ok(kept)
 }
-fn confirm(previous: &[Detection], current: &mut [Detection]) -> f32 {
-    let mut used = vec![false; previous.len()];
-    let mut score = 0f32;
-    for detection in current {
-        let matched = previous
-            .iter()
-            .enumerate()
-            .filter(|(i, p)| {
-                !used[*i] && p.class == detection.class && overlap(p, detection) >= 0.2
-            })
-            .max_by(|(_, a), (_, b)| overlap(a, detection).total_cmp(&overlap(b, detection)));
-        if let Some((i, old)) = matched {
-            used[i] = true;
-            let distance = ((detection.x - old.x).powi(2) + (detection.y - old.y).powi(2)).sqrt();
-            let moved = distance >= (old.w.min(old.h) * 0.05).max(3.);
-            detection.steps = if moved { old.steps + 1 } else { 0 };
-            if detection.steps >= 2 {
-                score = score.max(detection.confidence);
-            }
-        }
-    }
-    score
-}
-/// Sample 2 FPS, streaming frames into inference to keep memory bounded.
-/// Returns the time and confidence of confirmed movement, or (middle, 0) when still.
+/// One AI image per clip, after persistent movement passes the cheap size gate.
 pub async fn analyze(video: &Path) -> Result<(f64, f32)> {
     let confidence = number("MOTION_CONFIDENCE", 0.5)?;
     if confidence < crate::storage::MOTION_THRESHOLD {
         bail!("MOTION_CONFIDENCE harus >= 0.5");
     }
     let area = number("MOTION_MIN_AREA", 0.002)?;
-    let mut loaded_model = None;
-    let mut command = crate::process::ffmpeg();
-    command.args(["-hide_banner", "-loglevel", "error", "-threads", "1", "-i"])
-        .arg(video).args(["-an", "-vf",
-            "fps=2,scale=640:640:force_original_aspect_ratio=decrease,pad=640:640:(ow-iw)/2:(oh-ih)/2:color=0x727272",
-            "-threads", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+    let scan = crate::motion_gate::scan(video, area).await?;
+    if scan.regions.is_empty() {
+        return Ok((scan.at, 0.));
+    }
+    static AI: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
+    // The permit stays INSIDE the worker even when the caller times out. Never start
+    // another inference beside a timed-out operation on this small CPU.
+    let permit = AI
+        .get_or_init(|| Arc::new(tokio::sync::Semaphore::new(1)))
+        .clone()
+        .try_acquire_owned()
+        .context("AI masih sibuk; klip belum dianalisis")?;
+    let mut grab = crate::process::analysis_ffmpeg();
+    grab.args(["-hide_banner","-loglevel","error","-threads","1","-ss",&format!("{:.3}",scan.at),"-i"])
+        .arg(video).args(["-an","-frames:v","1","-filter_threads","1","-vf",
+        "scale=640:640:force_original_aspect_ratio=decrease,pad=640:640:(ow-iw)/2:(oh-ih)/2:color=0x727272",
+        "-threads","1","-f","rawvideo","-pix_fmt","rgb24","-"])
         .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
-    let mut child = command.spawn()?;
-    let mut stdout = child.stdout.take().context("ffmpeg stdout")?;
-    let work = async {
-        let mut previous = vec![];
-        let mut frame = vec![0u8; FRAME_BYTES];
-        let mut count = 0usize;
-        let mut best = (0., 0f32);
-        loop {
-            // Distinguish clean EOF from a truncated RGB frame.
-            if stdout.read(&mut frame[..1]).await? == 0 {
-                break;
-            }
-            stdout.read_exact(&mut frame[1..]).await?;
-            let input = tract_ndarray::Array4::from_shape_fn((1, 3, SIDE, SIDE), |(_, c, y, x)| {
-                frame[(y * SIDE + x) * 3 + c] as f32 / 255.
-            })
-            .into_tensor();
-            let model = match &loaded_model {
-                Some(model) => Arc::clone(model),
-                None => {
-                    let model = tokio::task::spawn_blocking(model).await??;
-                    loaded_model = Some(model.clone());
-                    model
-                }
-            };
-            let mut current = tokio::task::spawn_blocking(move || -> Result<Vec<Detection>> {
-                let outputs = model.run(tvec!(input.into()))?;
-                decode(&outputs[0], confidence, area)
-            })
-            .await??;
-            let score = confirm(&previous, &mut current);
-            if std::env::var_os("MOTION_DEBUG").is_some() {
-                eprintln!("motion frame={count} score={score} detections={current:?}");
-            }
-            if score > best.1 {
-                best = (count as f64 / FPS, score);
-            }
-            previous = current;
-            count += 1;
+    let mut child = grab.spawn()?;
+    let mut stdout = child.stdout.take().context("AI frame stdout")?;
+    let mut frame = vec![0u8; FRAME_BYTES];
+    let read = async {
+        stdout.read_exact(&mut frame).await?;
+        // Closing the read side before wait prevents a malformed encoder blocking on output.
+        drop(stdout);
+        if !child.wait().await?.success() {
+            bail!("Frame AI gagal didekode");
         }
-        if !child.wait().await?.success() || count == 0 {
-            bail!("Decode video untuk deteksi gagal");
-        }
-        if best.1 == 0. {
-            best.0 = count as f64 / FPS / 2.;
-        }
-        Ok(best)
+        Ok::<_, anyhow::Error>(())
     };
-    tokio::time::timeout(Duration::from_secs(300), work)
+    match tokio::time::timeout(Duration::from_secs(3), read).await {
+        Ok(result) => result?,
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            bail!("Batas decode frame AI tercapai");
+        }
+    }
+    let (send, receive) = tokio::sync::oneshot::channel();
+    let regions = scan.regions;
+    std::thread::Builder::new()
+        .name("motion-ai".into())
+        .spawn(move || {
+            let _permit = permit;
+            // A dedicated thread avoids changing the priority of Tokio's shared worker pool.
+            unsafe {
+                libc::setpriority(libc::PRIO_PROCESS, 0, 10);
+            }
+            let result = (|| -> Result<f32> {
+                let input =
+                    tract_ndarray::Array4::from_shape_fn((1, 3, SIDE, SIDE), |(_, c, y, x)| {
+                        frame[(y * SIDE + x) * 3 + c] as f32 / 255.
+                    })
+                    .into_tensor();
+                let outputs = model()?.run(tvec!(input.into()))?;
+                let detections = decode(&outputs[0], confidence, area)?;
+                Ok(verified_score(&detections, &regions))
+            })();
+            let _ = send.send(result);
+        })?;
+    let score = tokio::time::timeout(Duration::from_secs(8), receive)
         .await
-        .context("Deteksi objek terlalu lama")?
+        .context("Batas waktu AI tercapai; klip belum dianalisis")???;
+    Ok((scan.at, score))
+}
+fn verified_score(detections: &[Detection], regions: &[crate::motion_gate::Region]) -> f32 {
+    use crate::motion_gate::{Region, SIDE as GATE_SIDE};
+    let ratio = SIDE as f32 / GATE_SIDE as f32;
+    detections
+        .iter()
+        .filter(|d| {
+            let object = Region {
+                x: d.x - d.w / 2.,
+                y: d.y - d.h / 2.,
+                w: d.w,
+                h: d.h,
+            };
+            regions.iter().any(|r| {
+                let changed = Region {
+                    x: r.x * ratio,
+                    y: r.y * ratio,
+                    w: r.w * ratio,
+                    h: r.h * ratio,
+                };
+                object.intersection(changed) >= 0.15 * object.area().min(changed.area())
+            })
+        })
+        .map(|d| d.confidence)
+        .fold(0., f32::max)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn cat(x: f32) -> Detection {
-        Detection {
+    #[test]
+    fn static_object_elsewhere_does_not_confirm_motion() {
+        let cat = Detection {
             class: 15,
             confidence: 0.9,
-            x,
+            x: 100.,
             y: 100.,
             w: 80.,
             h: 60.,
-            steps: 0,
-        }
-    }
-    #[test]
-    fn movement_requires_same_object_across_three_frames() {
-        let a = vec![cat(100.)];
-        let mut b = vec![cat(110.)];
-        assert_eq!(confirm(&a, &mut b), 0.);
-        let mut c = vec![cat(120.)];
-        assert_eq!(confirm(&b, &mut c), 0.9);
-        assert_eq!(confirm(&[], &mut [cat(130.)]), 0.);
-    }
-    #[test]
-    fn stationary_jitter_and_different_classes_do_not_trigger() {
-        let a = vec![cat(100.)];
-        let mut b = vec![cat(101.)];
-        assert_eq!(confirm(&a, &mut b), 0.);
-        b[0].class = 16;
-        assert_eq!(confirm(&a, &mut b), 0.);
+        };
+        let elsewhere = crate::motion_gate::Region {
+            x: 180.,
+            y: 180.,
+            w: 30.,
+            h: 30.,
+        };
+        assert_eq!(verified_score(&[cat.clone()], &[elsewhere]), 0.);
+        let overlapping = crate::motion_gate::Region {
+            x: 30.,
+            y: 30.,
+            w: 20.,
+            h: 20.,
+        };
+        assert_eq!(verified_score(&[cat], &[overlapping]), 0.9);
     }
     #[test]
     fn output_filters_small_objects_birds_and_insects_and_suppresses_duplicates() {

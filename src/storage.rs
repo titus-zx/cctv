@@ -32,6 +32,7 @@ pub struct Clip {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub motion: Option<f32>,
     pub moving: bool,
+    pub motion_version: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera_id: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -62,6 +63,7 @@ pub fn parse_name(name: &str, size: u64) -> Option<Clip> {
         size,
         motion: None,
         moving: false,
+        motion_version: crate::motion::VERSION,
         camera_id: None,
         camera: None,
     })
@@ -319,6 +321,9 @@ impl Store {
 pub struct QueueStatus {
     pub uploaded: u64,
     pub pending: usize,
+    pub analysis_pending: usize,
+    pub analysis_skipped: u64,
+    pub analysis_failed: u64,
     pub error: Option<String>,
 }
 #[derive(Clone)]
@@ -327,6 +332,7 @@ pub struct UploadQueue {
     pub status: Arc<Mutex<QueueStatus>>,
     sender: tokio::sync::mpsc::UnboundedSender<PathBuf>,
     index: Arc<Index>,
+    analysis: crate::analysis::AnalysisQueue,
 }
 impl UploadQueue {
     pub fn new(
@@ -338,14 +344,14 @@ impl UploadQueue {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<PathBuf>();
         let queued = Arc::new(Mutex::new(HashSet::new()));
         let status = Arc::new(Mutex::new(QueueStatus::default()));
+        let analysis = crate::analysis::AnalysisQueue::new(store.clone(), status.clone(), cancel.clone());
         let set = queued.clone();
         let state = status.clone();
         tokio::spawn(async move {
             loop {
                 let file = tokio::select! {_ = cancel.cancelled()=>break,file=receiver.recv()=>match file{Some(file)=>file,None=>break}};
                 let mut attempts = 0;
-                // Before upload: with keepLocal off the video leaves this disk right after.
-                store.ensure_thumb(&file).await;
+                // Analysis owns a bounded hard link and proceeds independently of upload.
                 loop {
                     if !file.exists() {
                         set.lock().await.remove(&file);
@@ -388,6 +394,7 @@ impl UploadQueue {
             status,
             sender,
             index,
+            analysis,
         }
     }
     pub async fn add(&self, file: PathBuf) {
@@ -400,10 +407,12 @@ impl UploadQueue {
         let mut queued = self.queued.lock().await;
         if queued.insert(file.clone()) {
             self.status.lock().await.pending = queued.len();
+            self.analysis.submit(&file).await;
             let _ = self.sender.send(file);
         }
     }
     pub async fn recover(&self, dir: &Path) -> Result<()> {
+        self.analysis.recover().await;
         let mut entries = match tokio::fs::read_dir(dir).await {
             Ok(entries) => entries,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),

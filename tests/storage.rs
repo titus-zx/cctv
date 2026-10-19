@@ -238,7 +238,7 @@ async fn thumbnail_rejects_scene_changes_without_recognized_objects() {
     let dir = tempfile::tempdir().unwrap();
     let make = |name: &str, source: &str| {
         let status = std::process::Command::new("ffmpeg")
-            .args(["-v", "error", "-f", "lavfi", "-i", source, "-t", "2", "-g", "10"])
+            .args(["-v", "error", "-f", "lavfi", "-i", source, "-t", "3", "-g", "10"])
             .args(["-c:v", "libx264", "-pix_fmt", "yuv420p"])
             .arg(dir.path().join(name))
             .status()
@@ -284,7 +284,7 @@ async fn real_dog_must_move_before_being_labelled_motion() {
             "scale=320:320:force_original_aspect_ratio=decrease,pad=640:640:x=160:y=160:color=gray"
         };
         let status = std::process::Command::new("ffmpeg").args(["-v","error","-loop","1","-i"])
-            .arg(&image).args(["-vf",filter,"-t","3","-r","4","-c:v","libx264","-pix_fmt","yuv420p"])
+            .arg(&image).args(["-vf",filter,"-t","3","-r","4","-c:v","libx264","-g","4","-pix_fmt","yuv420p"])
             .arg(&video).status().unwrap();
         assert!(status.success());
         let (at, score) = cctv::motion::analyze(&video).await.unwrap();
@@ -292,4 +292,54 @@ async fn real_dog_must_move_before_being_labelled_motion() {
         if moving { assert!(score >= storage::MOTION_THRESHOLD); }
         else { assert_eq!(score, 0.); }
     }
+}
+
+#[test]
+fn upload_does_not_wait_for_slow_analysis() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let fake = dir.path().join("slow-ffmpeg");
+    std::fs::write(&fake,"#!/bin/sh\nexec sleep 30\n").unwrap();
+    std::fs::set_permissions(&fake,std::fs::Permissions::from_mode(0o755)).unwrap();
+    // A subprocess keeps the FFmpeg override isolated from concurrently running tests.
+    let result = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--ignored","--exact","analysis_upload_subprocess","--nocapture"])
+        .env("FFMPEG_PATH",fake).env("MOTION_CONFIDENCE","0.5").env("MOTION_MIN_AREA","0.002")
+        .output().unwrap();
+    assert!(result.status.success(),"{}\n{}",String::from_utf8_lossy(&result.stdout),String::from_utf8_lossy(&result.stderr));
+}
+#[test]
+#[ignore = "subprocess helper invoked by upload_does_not_wait_for_slow_analysis"]
+fn analysis_upload_subprocess() {
+    tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+        use std::time::{Duration,Instant};
+        let dir = tempfile::tempdir().unwrap();
+        let name = "cam1_20260101_100000.mp4";
+        let source = dir.path().join(name);
+        mp4(&source);
+        let store = Store::new(&settings(dir.path()));
+        let stop = CancellationToken::new();
+        // Local upload is a successful mock; false exercises the remote cleanup path.
+        let queue = UploadQueue::new(store.clone(),false,stop.clone());
+        let began = Instant::now();
+        queue.add(source.clone()).await;
+        tokio::time::timeout(Duration::from_secs(1),async {
+            while queue.status.lock().await.uploaded != 1 || source.exists() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        }).await.expect("upload must finish while analysis is blocked");
+        assert!(began.elapsed()<Duration::from_secs(1));
+        let pinned = dir.path().join(cctv::analysis::DIR).join(name);
+        assert!(pinned.exists(),"analysis must retain a hard link after the original is removed");
+        assert_eq!(queue.status.lock().await.analysis_pending,1);
+        tokio::time::timeout(Duration::from_secs(6),async {
+            while queue.status.lock().await.analysis_pending != 0 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        }).await.expect("scan budget must bound a hung decoder");
+        assert!(!pinned.exists());
+        assert_eq!(queue.status.lock().await.analysis_failed,1);
+        assert_eq!(store.index.motion(name),None,"timed-out analysis must remain unknown");
+        stop.cancel();
+    });
 }

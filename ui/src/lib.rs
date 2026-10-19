@@ -627,7 +627,7 @@ async fn load(keep_page: bool) {
                                 let _ = img.set_attribute("alt", "");
                                 let _ = img.set_attribute(
                                     "src",
-                                    &format!("/thumbs/{}", field(clip, "name")),
+                                    &format!("/thumbs/{}?v={}", field(clip, "name"), clip["motionVersion"].as_u64().unwrap_or(0)),
                                 );
                                 let _ = button.append_child(&img);
                             } else if let Ok(blank) = document().create_element("div") {
@@ -656,6 +656,11 @@ async fn load(keep_page: bool) {
                                     && let Ok(tag) = document().create_element("em")
                                 {
                                     text(&tag, "● gerakan");
+                                    let _ = meta.append_child(&tag);
+                                } else if !clip["motion"].is_number()
+                                    && let Ok(tag) = document().create_element("em")
+                                {
+                                    text(&tag, "Belum dianalisis");
                                     let _ = meta.append_child(&tag);
                                 }
                                 let _ = button.append_child(&meta);

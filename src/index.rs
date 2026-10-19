@@ -38,6 +38,7 @@ struct Inner {
 pub struct Index {
     path: Option<PathBuf>,
     inner: Mutex<Inner>,
+    persist_lock: tokio::sync::Mutex<()>,
 }
 fn day_of(name: &str) -> Option<String> {
     parse_name(name, 0)?;
@@ -72,6 +73,7 @@ impl Index {
         Self {
             path,
             inner: Mutex::new(inner),
+            persist_lock: tokio::sync::Mutex::new(()),
         }
     }
     /// True once the index came from disk or a full sync, so it can be trusted for listing.
@@ -168,6 +170,7 @@ impl Index {
         inner.ready = true;
     }
     pub async fn persist(&self) {
+        let _guard = self.persist_lock.lock().await;
         let Some(path) = &self.path else { return };
         let bytes = {
             let mut inner = self.inner.lock().unwrap();

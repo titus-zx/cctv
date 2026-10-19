@@ -34,7 +34,7 @@ async fn run(command: &mut tokio::process::Command, capture: bool) -> Result<Str
         .stdout(if capture { Stdio::piped() } else { Stdio::null() })
         .stderr(Stdio::null())
         .kill_on_drop(true);
-    let output = tokio::time::timeout(Duration::from_secs(60), command.output())
+    let output = tokio::time::timeout(Duration::from_secs(3), command.output())
         .await
         .context("ffmpeg terlalu lama")??;
     if !output.status.success() {
@@ -49,8 +49,8 @@ pub async fn analyze(video: &Path, output: &Path) -> Result<f32> {
         ".tmp-{}",
         output.file_name().context("nama thumbnail")?.to_string_lossy()
     ));
-    let mut grab = process::ffmpeg();
-    grab.args(["-hide_banner", "-loglevel", "error", "-y", "-ss", &format!("{at:.3}"), "-i"])
+    let mut grab = process::analysis_ffmpeg();
+    grab.args(["-hide_banner", "-loglevel", "error", "-threads", "1", "-filter_threads", "1", "-y", "-ss", &format!("{at:.3}"), "-i"])
         .arg(video)
         .args([
             "-an",
@@ -58,6 +58,8 @@ pub async fn analyze(video: &Path, output: &Path) -> Result<f32> {
             "1",
             "-vf",
             &format!("scale={THUMB_WIDTH}:-2"),
+            "-threads",
+            "1",
             "-q:v",
             "6",
         ])

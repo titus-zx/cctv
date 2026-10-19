@@ -1,9 +1,11 @@
+pub mod analysis;
 pub mod auth;
 pub mod camera;
 pub mod cli;
 pub mod config;
 pub mod index;
 pub mod motion;
+pub mod motion_gate;
 pub mod process;
 pub mod protocol;
 pub mod recording;

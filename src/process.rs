@@ -300,6 +300,12 @@ async fn terminate(child: &mut Child, grace: Duration) -> bool {
     let _ = child.wait().await;
     false
 }
+/// Background analysis yields CPU time to capture/preview on a two-core machine.
+pub fn analysis_ffmpeg() -> Command {
+    let mut command = Command::new("nice");
+    command.args(["-n", "10"]).arg(std::env::var("FFMPEG_PATH").unwrap_or_else(|_| "ffmpeg".into()));
+    command
+}
 pub fn ffmpeg() -> Command {
     Command::new(std::env::var("FFMPEG_PATH").unwrap_or_else(|_| "ffmpeg".into()))
 }
