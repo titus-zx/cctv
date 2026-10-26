@@ -29,22 +29,34 @@ pub fn clip_name(thumb: &str) -> Option<String> {
     parse_name(&name, 0).map(|_| name)
 }
 async fn run(command: &mut tokio::process::Command, capture: bool) -> Result<String> {
+    let stderr = tempfile::NamedTempFile::new()?;
     command
         .stdin(Stdio::null())
         .stdout(if capture { Stdio::piped() } else { Stdio::null() })
-        .stderr(Stdio::null())
+        .stderr(Stdio::from(stderr.reopen()?))
         .kill_on_drop(true);
     let output = tokio::time::timeout(Duration::from_secs(3), command.output())
         .await
         .context("ffmpeg terlalu lama")??;
     if !output.status.success() {
-        bail!("ffmpeg gagal")
+        bail!(
+            "ffmpeg gagal ({}): {}",
+            output.status,
+            process::analysis_stderr(stderr.path()).await
+        )
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 /// Thumbnail and confidence of confirmed movement by a recognized object.
 pub async fn analyze(video: &Path, output: &Path) -> Result<f32> {
-    let (at, motion) = crate::motion::analyze(video).await?;
+    let analysis = crate::motion::analyze(video).await;
+    let at = match &analysis {
+        Ok((at, _)) => *at,
+        Err(error) => match error.downcast_ref::<crate::motion_gate::InsufficientFrames>() {
+            Some(short) if short.count > 0 => short.at,
+            _ => return Err(analysis.unwrap_err()),
+        },
+    };
     let temp = output.with_file_name(format!(
         ".tmp-{}",
         output.file_name().context("nama thumbnail")?.to_string_lossy()
@@ -65,11 +77,20 @@ pub async fn analyze(video: &Path, output: &Path) -> Result<f32> {
         ])
         .arg(&temp);
     let result = run(&mut grab, false).await;
-    if result.is_err() || tokio::fs::rename(&temp, output).await.is_err() {
-        let _ = tokio::fs::remove_file(&temp).await;
-        bail!("Thumbnail gagal dibuat.")
+    let result = async {
+        result.context("Thumbnail gagal dibuat")?;
+        tokio::fs::rename(&temp, output)
+            .await
+            .context("Thumbnail gagal disimpan")?;
+        Ok::<_, anyhow::Error>(())
     }
-    Ok(motion)
+    .await;
+    if result.is_err() {
+        let _ = tokio::fs::remove_file(&temp).await;
+    }
+    result?;
+    // A short clip still gets a thumbnail, but its movement remains unclassified.
+    analysis.map(|(_, motion)| motion)
 }
 static LIMIT: OnceLock<Semaphore> = OnceLock::new();
 impl Store {

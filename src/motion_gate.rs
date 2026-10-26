@@ -109,15 +109,50 @@ fn persistent(previous: &[Region], current: &[Region]) -> bool {
         })
     })
 }
-/// No frames are retained after scoring. The cap/timeout produces an error, never a false negative.
+#[derive(Debug)]
+pub struct InsufficientFrames {
+    pub at: f64,
+    pub count: usize,
+}
+impl std::fmt::Display for InsufficientFrames {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Frame temporal tidak cukup ({}/3); klip belum dianalisis",
+            self.count
+        )
+    }
+}
+impl std::error::Error for InsufficientFrames {}
+
+/// Sparse GOPs get a sampled full-decode pass within the same total budget.
+/// Incomplete scans remain unknown, never a false negative.
 pub async fn scan(video: &Path, min_area: f32) -> Result<Scan> {
+    tokio::time::timeout(Duration::from_secs(4), async {
+        match scan_pass(video, min_area, true).await {
+            Err(error) if error.downcast_ref::<InsufficientFrames>().is_some() => {
+                scan_pass(video, min_area, false).await
+            }
+            result => result,
+        }
+    })
+    .await
+    .context("Batas waktu pemindaian gerakan tercapai")?
+}
+
+async fn scan_pass(video: &Path, min_area: f32, keyframes_only: bool) -> Result<Scan> {
     let metadata = tempfile::NamedTempFile::new()?;
+    let stderr = tempfile::NamedTempFile::new()?;
     let mut command = crate::process::analysis_ffmpeg();
-    command.args(["-hide_banner","-loglevel","error","-threads","1","-skip_frame","nokey","-i"])
+    command.args(["-hide_banner", "-loglevel", "error", "-threads", "1"]);
+    if keyframes_only {
+        command.args(["-skip_frame", "nokey"]);
+    }
+    command.arg("-i")
         .arg(video).args(["-an","-filter_threads","1","-vf"])
         .arg(format!("select='isnan(prev_selected_t)+gte(t-prev_selected_t,0.5)',scale={SIDE}:{SIDE}:force_original_aspect_ratio=decrease,pad={SIDE}:{SIDE}:(ow-iw)/2:(oh-ih)/2,format=gray,boxblur=1:1,metadata=mode=add:key=cctv:value=frame,metadata=print:file={}",metadata.path().display()))
         .args(["-frames:v", &MAX_FRAMES.to_string(),"-fps_mode","passthrough","-threads","1","-f","rawvideo","-pix_fmt","gray","-"])
-        .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).kill_on_drop(true);
+        .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::from(stderr.reopen()?)).kill_on_drop(true);
     let mut child = command.spawn()?;
     let mut stdout = child.stdout.take().context("scan stdout")?;
     let work = async {
@@ -145,8 +180,12 @@ pub async fn scan(video: &Path, min_area: f32) -> Result<Scan> {
             previous = Some(frame.clone());
             count += 1;
         }
-        if !child.wait().await?.success() || count < 3 {
-            bail!("Pemindaian keyframe gagal");
+        let status = child.wait().await?;
+        if !status.success() {
+            bail!(
+                "Pemindaian frame gagal ({status}): {}",
+                crate::process::analysis_stderr(stderr.path()).await
+            );
         }
         if count >= MAX_FRAMES {
             bail!("Batas keyframe tercapai; analisis belum lengkap");
@@ -159,6 +198,13 @@ pub async fn scan(video: &Path, min_area: f32) -> Result<Scan> {
         if times.len() != count {
             bail!("Timestamp keyframe tidak lengkap");
         }
+        if count < 3 {
+            return Err(InsufficientFrames {
+                at: times.get(count / 2).copied().unwrap_or(0.),
+                count,
+            }
+            .into());
+        }
         let at = if best.2.is_empty() {
             times[count / 2]
         } else {
@@ -169,12 +215,13 @@ pub async fn scan(video: &Path, min_area: f32) -> Result<Scan> {
             regions: best.2,
         })
     };
-    let result = tokio::time::timeout(Duration::from_secs(4), work).await;
+    // The outer timeout covers both passes; kill_on_drop also handles cancellation.
+    let result = work.await;
     if result.is_err() {
         let _ = child.kill().await;
         let _ = child.wait().await;
     }
-    result.context("Batas waktu pemindaian gerakan tercapai")?
+    result
 }
 
 #[cfg(test)]

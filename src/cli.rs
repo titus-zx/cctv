@@ -25,11 +25,11 @@ pub async fn run(args: Vec<String>) -> Result<()> {
             let response = reqwest::Client::builder()
                 .timeout(Duration::from_secs(4))
                 .build()?
-                .get(format!("http://127.0.0.1:{port}/api/cameras"))
+                .get(format!("http://127.0.0.1:{port}/healthz"))
                 .send()
                 .await?;
             if !response.status().is_success() {
-                bail!("Server tidak sehat.")
+                bail!("Server tidak sehat (HTTP {}).", response.status())
             }
             Ok(())
         }

@@ -55,7 +55,7 @@ type ApiResult = std::result::Result<Response, ApiError>;
 pub fn router(app: Arc<App>, public_dir: PathBuf) -> Router {
     router_with_auth(app, public_dir, None)
 }
-/// With `auth`, every path except the login page and its assets requires a valid session.
+/// With `auth`, every path except health, the login page and its assets requires a valid session.
 pub fn router_with_auth(app: Arc<App>, public_dir: PathBuf, auth: Option<Arc<Auth>>) -> Router {
     let mut router = Router::new()
         .route("/api/cameras", get(cameras))
@@ -79,7 +79,11 @@ pub fn router_with_auth(app: Arc<App>, public_dir: PathBuf, auth: Option<Arc<Aut
             .layer(middleware::from_fn_with_state(auth.clone(), guard))
             .layer(Extension(auth));
     }
-    router.layer(middleware::from_fn(headers)).with_state(app)
+    // Add after the auth layer: liveness exposes no camera or configuration data.
+    router
+        .route("/healthz", get(|| async { StatusCode::NO_CONTENT }))
+        .layer(middleware::from_fn(headers))
+        .with_state(app)
 }
 const LOGIN_PAGE: &str = include_str!("login.html");
 fn login_html(status: StatusCode, error: &str) -> Response {

@@ -372,3 +372,19 @@ pub fn jpeg_size(jpeg: &[u8]) -> Option<(u32, u32)> {
     }
     None
 }
+
+/// Only local-file analysis calls this; stream decoder stderr may contain credentials.
+pub async fn analysis_stderr(path: &std::path::Path) -> String {
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+    let result = async {
+        let mut file = tokio::fs::File::open(path).await?;
+        let len = file.metadata().await?.len();
+        file.seek(std::io::SeekFrom::Start(len.saturating_sub(4096)))
+            .await?;
+        let mut bytes = Vec::new();
+        file.take(4096).read_to_end(&mut bytes).await?;
+        Ok::<_, std::io::Error>(String::from_utf8_lossy(&bytes).trim().to_owned())
+    }
+    .await;
+    result.unwrap_or_else(|_| "stderr tidak dapat dibaca".into())
+}

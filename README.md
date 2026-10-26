@@ -141,3 +141,9 @@ Untuk smoke test browser dengan kamera sintetis dan MP4 lokal:
 cargo run --example browser_fixture
 # http://127.0.0.1:3390
 ```
+
+### Diagnostik analisis dan healthcheck
+
+Healthcheck Docker memakai `GET /healthz` (HTTP 204), yang dapat diakses tanpa sesi dan tidak mengembalikan data kamera. API kamera dan rekaman tetap memerlukan login.
+
+Pemindaian mencoba keyframe terlebih dahulu. Jika kurang dari tiga sampel, decoder mencoba frame biasa dengan interval minimal 0,5 detik dalam anggaran total empat detik yang sama. Klip yang tetap terlalu pendek mendapatkan thumbnail jika frame tersedia, tetapi status gerak tetap **Belum dianalisis**. Kegagalan decoder mencatat exit status dan maksimal 4 KiB bagian akhir stderr FFmpeg; batas waktu dan jumlah frame tetap berlaku.

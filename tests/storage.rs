@@ -343,3 +343,44 @@ fn analysis_upload_subprocess() {
         stop.cancel();
     });
 }
+
+#[tokio::test]
+async fn sparse_keyframes_use_sampled_frames_and_tiny_clips_stay_unknown() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, duration) in [
+        ("cam1_20260101_120000.mp4", "2"),
+        ("cam1_20260101_120100.mp4", "0.2"),
+    ] {
+        let status = std::process::Command::new("ffmpeg")
+            .args(["-v", "error", "-f", "lavfi", "-i", "color=c=gray:size=320x240:rate=10",
+                "-t", duration, "-c:v", "libx264", "-g", "100", "-pix_fmt", "yuv420p"])
+            .arg(dir.path().join(name)).status().unwrap();
+        assert!(status.success());
+    }
+    let normal = dir.path().join("cam1_20260101_120000.mp4");
+    let thumb = dir.path().join("normal.jpg");
+    assert_eq!(cctv::thumbs::analyze(&normal, &thumb).await.unwrap(), 0.);
+    assert!(thumb.metadata().unwrap().len() > 100);
+
+    let tiny = dir.path().join("cam1_20260101_120100.mp4");
+    let store = Store::new(&settings(dir.path()));
+    store.index.add("cam1_20260101_120100.mp4", tiny.metadata().unwrap().len());
+    store.ensure_thumb(&tiny).await;
+    assert_eq!(store.index.motion("cam1_20260101_120100.mp4"), None);
+    assert!(cctv::thumbs::thumb_path(dir.path(), "cam1_20260101_120100.mp4")
+        .unwrap().metadata().unwrap().len() > 100);
+    let error = cctv::motion_gate::scan(&tiny, 0.002).await.err().unwrap();
+    assert!(error.downcast_ref::<cctv::motion_gate::InsufficientFrames>().is_some());
+}
+
+#[tokio::test]
+async fn corrupt_video_reports_decoder_details_instead_of_insufficient_frames() {
+    let dir = tempfile::tempdir().unwrap();
+    let video = dir.path().join("broken.mp4");
+    std::fs::write(&video, b"not an MP4").unwrap();
+    let error = cctv::motion_gate::scan(&video, 0.002).await.err().unwrap();
+    assert!(error.downcast_ref::<cctv::motion_gate::InsufficientFrames>().is_none());
+    let text = error.to_string();
+    assert!(text.contains("Pemindaian frame gagal"), "{text}");
+    assert!(text.contains("moov atom not found") || text.contains("Invalid data"), "{text}");
+}

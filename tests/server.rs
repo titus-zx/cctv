@@ -255,6 +255,9 @@ async fn pin_gate_blocks_everything_until_login_and_locks_out_guessing() {
     assert_eq!(call(&router, "GET", "/login", None, "").await.status(), StatusCode::OK);
     let forged = Some("cctv_session=deadbeef");
     assert_eq!(call(&router, "GET", "/api/cameras", forged, "").await.status(), StatusCode::UNAUTHORIZED);
+    let health = call(&router, "GET", "/healthz", None, "").await;
+    assert_eq!(health.status(), StatusCode::NO_CONTENT);
+    assert!(health.headers().get("set-cookie").is_none());
     // Wrong guesses never create a session; the fifth locks even the right PIN out.
     for _ in 0..4 {
         let response = call(&router, "POST", "/login", None, "pin=000000").await;
