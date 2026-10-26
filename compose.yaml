@@ -37,6 +37,11 @@ services:
         target: /app/rclone
         bind:
           create_host_path: false
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     stop_grace_period: 15s
     healthcheck:
       test: ["CMD", "/app/cctv", "healthcheck"]

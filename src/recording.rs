@@ -14,6 +14,21 @@ use std::{
 };
 use tokio::sync::{OnceCell, mpsc};
 
+const MIN_FREE_BYTES: u64 = 1 << 30;
+
+fn free_bytes(dir: &Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::CString::new(dir.as_os_str().as_bytes()).ok()?;
+    let mut stat = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY: `path` is NUL-terminated and `stat` is only read after statvfs succeeds.
+    unsafe {
+        (libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) == 0).then(|| {
+            let stat = stat.assume_init();
+            stat.f_bavail as u64 * stat.f_frsize as u64
+        })
+    }
+}
+
 pub fn finalized_mp4(file: &Path) -> bool {
     let Ok(mut file) = std::fs::File::open(file) else {
         return false;
@@ -119,6 +134,7 @@ pub struct Recorder {
     queue: UploadQueue,
     software_only: bool,
     stopping: bool,
+    retry_after: Instant,
 }
 impl Recorder {
     pub fn new(camera: Camera, settings: Recording, queue: UploadQueue) -> Self {
@@ -129,6 +145,7 @@ impl Recorder {
             events,
             last_progress: Instant::now(),
             staging: None,
+            retry_after: Instant::now(),
             pending: String::new(),
             settings,
             camera,
@@ -160,7 +177,15 @@ impl Recorder {
             "libx264"
         };
         let fps = self.camera.recording_fps.unwrap_or(fps).clamp(1.0, 60.0);
+        if Instant::now() < self.retry_after {
+            return Ok(());
+        }
         tokio::fs::create_dir_all(&self.settings.dir).await?;
+        if free_bytes(&self.settings.dir).is_some_and(|free| free < MIN_FREE_BYTES) {
+            self.retry_after = Instant::now() + Duration::from_secs(30);
+            self.status.error = Some("Ruang disk hampir penuh; rekaman ditunda.".into());
+            return Ok(());
+        }
         let staging = tempfile::Builder::new()
             .prefix(".partial-")
             .tempdir_in(&self.settings.dir)?
@@ -372,6 +397,7 @@ impl Recorder {
                 }
                 if !success && !self.stopping {
                     self.status.restarts += 1;
+                    self.retry_after = Instant::now() + Duration::from_secs(10);
                     self.status.error =
                         Some("Recorder berhenti; menunggu keyframe berikutnya.".into());
                     if self.status.encoder.as_deref() == Some("h264_vaapi") {
@@ -382,7 +408,7 @@ impl Recorder {
                 self.process = None;
                 self.stopping = false;
                 if let Some(staging) = self.staging.take() {
-                    let _ = tokio::fs::remove_dir(staging).await;
+                    let _ = tokio::fs::remove_dir_all(staging).await;
                 }
             }
         }
